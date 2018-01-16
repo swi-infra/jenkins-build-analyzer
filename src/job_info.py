@@ -69,7 +69,12 @@ class JobInfo:
 
         self.__timestamp = int(tree.find('./timestamp').text)
         self.__duration = int(tree.find('./duration').text)
-        self.__result = tree.find('./result').text
+        if tree.find('./result') != None:
+            self.__result = tree.find('./result').text
+        elif tree.find('./building') != None and tree.find('./building').text == 'true':
+            self.__result = 'IN_PROGRESS'
+        else:
+            self.__result = 'UNKNOWN'
 
         logger.debug("%s#%s: %s %d %d %s" % (self.job_name, self.build_number, self.__job_type,
                                                                                self.__timestamp,

@@ -12,6 +12,7 @@ STYLES = """rect        { stroke-width: 1; stroke-opacity: 0; }
       rect.failure      { fill: rgb(255,170,170); fill-opacity: 0.7; }
       rect.unstable     { fill: rgb(255,204,170); fill-opacity: 0.7; }
       rect.other        { fill: rgb(204,204,204); fill-opacity: 0.7; }
+      rect.in_progress  { fill: rgb(135,205,222); fill-opacity: 0.7; }
       rect.box          { fill: rgb(240,240,240); stroke: rgb(192,192,192); }
       line       { stroke: rgb(64,64,64); stroke-width: 1; }
 //    line.min1  { }
@@ -38,16 +39,23 @@ class SvgPrinter:
 
     def __determine_sizes(self):
 
+        self.base_timestamp = self.job_info.timestamp()
+
         # Height based on number of builds to show
         self.box_height = self.build_height*len(self.job_info.all_builds())
         self.total_height = 2*self.margin + self.box_height
 
         # Width based on duration
-        self.max_duration = math.ceil(self.job_info.duration() / 1000 / 60 / 5) * 5 # in minutes, rounded up
+        self.max_duration = self.job_info.duration()
+        if self.job_info.result() == "IN_PROGRESS":
+            for build in self.job_info.all_builds():
+                self.max_duration = max(self.max_duration, build.timestamp() + build.duration() - self.base_timestamp)
+
+        self.max_duration = math.ceil(self.max_duration / 1000 / 60 / 5) * 5 # in minutes, rounded up
+
         self.box_width = self.minute_width*self.max_duration
         self.total_width = 2*self.margin + self.box_width
 
-        self.base_timestamp = self.job_info.timestamp()
 
         logger.debug("Total: %d x %d" % (self.total_height, self.total_width))
 
@@ -79,11 +87,13 @@ class SvgPrinter:
     def __render_build(self, build, index):
         dwg = self.__dwg
 
-        duration_min = build.duration() / 1000 / 60
-        duration_px = duration_min * self.minute_width
+        offset = (build.timestamp() - self.base_timestamp)  / 1000 / 60
+        offset_px = offset * self.minute_width
 
-        offset_min = (build.timestamp() - self.base_timestamp)  / 1000 / 60
-        offset_px = offset_min * self.minute_width
+        duration = build.duration() / 1000 / 60
+        if build.result() == "IN_PROGRESS":
+            duration = self.max_duration - offset
+        duration_px = duration * self.minute_width
 
         class_name = 'other'
         if build.result() == "SUCCESS":
@@ -94,9 +104,12 @@ class SvgPrinter:
             class_name = 'failure'
         elif build.result() == "UNSTABLE":
             class_name = 'unstable'
+        elif build.result() == "IN_PROGRESS":
+            class_name = 'in_progress'
 
         x = self.margin + offset_px
         y = self.margin + index*self.build_height
+
 
         dwg.add(dwg.rect(insert=(x, y + self.build_padding),
                          size=(duration_px, self.build_height - 2*self.build_padding),
