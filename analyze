@@ -1,0 +1,30 @@
+#!/usr/bin/env python
+
+import argparse
+import sys
+
+from src.job_info import JobInfoFetcher
+from src.svg_printer import SvgPrinter
+
+parser = argparse.ArgumentParser(description="Analyze a Jenkins build and print a time graph")
+
+# Jenkins
+parser.add_argument('-u', '--url', dest='url',
+                    help="URL of the Jenkins server")
+parser.add_argument('-j', '--job', dest='job',
+                    help="Job name")
+parser.add_argument('-b', '--build', dest='build_number', type=int,
+                    help="Build number")
+
+# Output
+parser.add_argument('-o', '--output', dest='output',
+                    help="Output path in SVG format")
+
+args = parser.parse_args()
+
+if not args.url or not args.job or not args.build_number:
+    print("A required argument has not been provided.", file=sys.stderr)
+    parser.print_help()
+    sys.exit(1)
+
+info = JobInfoFetcher.fetch(args.url, args.job, args.build_number)
