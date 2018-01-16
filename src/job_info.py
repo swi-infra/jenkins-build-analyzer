@@ -6,11 +6,19 @@ import coloredlogs, logging
 
 logger = logging.getLogger(__name__)
 
+pool_manager = urllib3.PoolManager(timeout=30.0)
+
 class JobInfoFetcher:
 
     def fetch(url, job_name, build_number):
         job_info = JobInfo(url, job_name, build_number)
         return job_info
+
+class JobNotFoundException(Exception):
+
+    def __init__(self, job_info):
+
+        super(JobNotFoundException, self).__init__("Job %s#%d not found" % (job_info.job_name, job_info.build_number))
 
 class JobInfo:
 
@@ -25,6 +33,7 @@ class JobInfo:
         self.__result = None
 
         self.__sub_builds = None
+        self.__all_builds = None
 
         if fetch_on_init:
             self.fetch()
@@ -40,7 +49,10 @@ class JobInfo:
         logger.info("Fetching info from %s" % url)
 
         headers = {'Connection': 'close'}
-        content = urllib3.PoolManager(timeout=10.0).urlopen('GET', url, headers=headers)
+        content = pool_manager.urlopen('GET', url, headers=headers)
+        if content.status != 200:
+            raise JobNotFoundException(self)
+
         raw_data = content.data.decode()
 
         tree = ET.XML(raw_data)
@@ -96,7 +108,7 @@ class JobInfo:
         logger.info("Fetching log from %s" % url)
 
         headers = {'Connection': 'close'}
-        content = urllib3.PoolManager(timeout=30.0).urlopen('GET', url, headers=headers)
+        content = pool_manager.urlopen('GET', url, headers=headers)
         raw_data = content.data.decode()
 
         self.__sub_builds = []
@@ -113,7 +125,28 @@ class JobInfo:
             build_number = int(m.group(3))
             logger.debug("Sub-build: %s %d" % (job, build_number))
 
-            self.__sub_builds.append( JobInfo(self.url, job, build_number) )
+            try:
+                job = JobInfo(self.url, job, build_number)
+                self.__sub_builds.append(job)
+
+            except JobNotFoundException as e:
+                logger.error(e)
 
         logger.info("%s#%d: %d sub_builds" % (self.job_name, self.build_number, len(self.__sub_builds)))
 
+    def sub_builds(self):
+        if not self.__sub_builds:
+            self.__fetch_sub_builds()
+
+        return self.__sub_builds
+
+    def all_builds(self):
+        if not self.__all_builds:
+            blds = [self]
+
+            for bld in self.sub_builds():
+                blds += bld.all_builds()
+
+            self.__all_builds = blds
+
+        return self.__all_builds

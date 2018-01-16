@@ -22,9 +22,12 @@ parser.add_argument('-o', '--output', dest='output',
 
 args = parser.parse_args()
 
-if not args.url or not args.job or not args.build_number:
+if not args.url or not args.job or not args.build_number or not args.output:
     print("A required argument has not been provided.", file=sys.stderr)
     parser.print_help()
     sys.exit(1)
 
-info = JobInfoFetcher.fetch(args.url, args.job, args.build_number)
+job_info = JobInfoFetcher.fetch(args.url, args.job, args.build_number)
+
+printer = SvgPrinter(job_info)
+printer.print(args.output)
