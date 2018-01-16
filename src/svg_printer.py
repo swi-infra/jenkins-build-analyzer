@@ -16,7 +16,8 @@ STYLES = """rect        { stroke-width: 1; stroke-opacity: 0; }
       rect.box          { fill: rgb(240,240,240); stroke: rgb(192,192,192); }
       line       { stroke: rgb(64,64,64); stroke-width: 1; }
 //    line.min1  { }
-      line.min5  { stroke-width: 2; }
+      line.min5  { stroke: rgb(150,150,150); stroke-width: 1; }
+      line.min60 { stroke: rgb(150,150,150); stroke-width: 2; }
       line.min01 { stroke: rgb(224,224,224); stroke-width: 1; }
       text       { font-family: Verdana, Helvetica; font-size: 14px; }
       text.left  { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: start; }
@@ -73,6 +74,8 @@ class SvgPrinter:
             class_name = "min01"
             if x % 5 == 0:
                 class_name = "min5"
+                if x % 60 == 0:
+                    class_name = "min60"
 
                 dwg.add(dwg.text("%dmin" % x,
                                  insert=(self.current_pos, self.margin-5),
