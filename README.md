@@ -5,9 +5,9 @@ This script takes care of analyzing Jenkins builds and sub-builds logs and show 
 
 It allows to visually show bottlenecks in CI environments.
 
-![Gerrit forge sample](samples/gerrit.svg)
+![Gerrit forge sample](samples/gerrit.png)
 
-Very much inspired by (systemd-analyze)[https://www.freedesktop.org/software/systemd/man/systemd-analyze.html] plotting function.
+Very much inspired by [systemd-analyze](https://www.freedesktop.org/software/systemd/man/systemd-analyze.html) plotting function.
 
 How to run
 ----------
