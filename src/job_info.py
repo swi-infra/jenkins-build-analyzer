@@ -60,6 +60,8 @@ class JobInfo:
         job_type = tree.tag
         if job_type == "workflowRun":
             self.__job_type = 'pipeline'
+        elif job_type == "flowRun":
+            self.__job_type = 'buildFlow'
         elif job_type == "freeStyleBuild":
             self.__job_type = 'freestyle'
         else:
@@ -100,7 +102,8 @@ class JobInfo:
 
     # Retreive the 'sub-builds', which are launched from this job.
     def __fetch_sub_builds(self):
-        if self.job_type() != 'pipeline':
+        if self.job_type() != 'pipeline' and \
+           self.job_type() != 'buildFlow':
             self.__sub_builds = []
             return
 
@@ -113,16 +116,22 @@ class JobInfo:
 
         self.__sub_builds = []
 
-        pattern = re.compile("(?:\[(.*)\] )?Starting building: (.+) #(\d+)")
+        pattern = None
+        if self.job_type() == 'pipeline':
+            pattern = re.compile("(?:\[.*\] )?Starting building: (.+) #(\d+)")
+        elif self.job_type() == 'buildFlow':
+            pattern = re.compile(" *Build (.+) #(\d+) started")
+
         for line in raw_data.splitlines():
+
             m = pattern.match(line)
             if not m:
                 continue
 
             logger.debug("Line: %s" % line)
 
-            job = m.group(2)
-            build_number = int(m.group(3))
+            job = m.group(1)
+            build_number = int(m.group(2))
             logger.debug("Sub-build: %s %d" % (job, build_number))
 
             try:
@@ -132,16 +141,16 @@ class JobInfo:
             except JobNotFoundException as e:
                 logger.error(e)
 
-        logger.info("%s#%d: %d sub_builds" % (self.job_name, self.build_number, len(self.__sub_builds)))
+        logger.info("%s#%d: %d sub-build(s)" % (self.job_name, self.build_number, len(self.__sub_builds)))
 
     def sub_builds(self):
-        if not self.__sub_builds:
+        if self.__sub_builds == None:
             self.__fetch_sub_builds()
 
         return self.__sub_builds
 
     def all_builds(self):
-        if not self.__all_builds:
+        if self.__all_builds == None:
             blds = [self]
 
             for bld in self.sub_builds():
