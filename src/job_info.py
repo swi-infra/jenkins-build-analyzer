@@ -48,8 +48,7 @@ class JobInfo:
         url = '/'.join([self.url, 'job', self.job_name, str(self.build_number), 'api/xml'])
         logger.info("Fetching info from %s" % url)
 
-        headers = {'Connection': 'close'}
-        content = pool_manager.urlopen('GET', url, headers=headers)
+        content = pool_manager.urlopen('GET', url)
         if content.status != 200:
             raise JobNotFoundException(self)
 
@@ -115,8 +114,7 @@ class JobInfo:
         url = '/'.join([self.url, 'job', self.job_name, self.build_number, 'consoleText'])
         logger.info("Fetching log from %s" % url)
 
-        headers = {'Connection': 'close'}
-        content = pool_manager.urlopen('GET', url, headers=headers)
+        content = pool_manager.urlopen('GET', url)
         raw_data = content.data.decode()
 
         self.__sub_builds = []
