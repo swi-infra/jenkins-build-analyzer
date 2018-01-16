@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<svg baseProfile="full" height="250" version="1.1" width="390" xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <style type="text/css">
+<![CDATA[rect        { stroke-width: 1; stroke-opacity: 0; }
+      rect.background   { fill: rgb(255,255,255); }
+      rect.aborted      { fill: rgb(190,200,183); fill-opacity: 0.7; }
+      rect.success      { fill: rgb(170,255,170); fill-opacity: 0.7; }
+      rect.failure      { fill: rgb(255,170,170); fill-opacity: 0.7; }
+      rect.unstable     { fill: rgb(255,204,170); fill-opacity: 0.7; }
+      rect.other        { fill: rgb(204,204,204); fill-opacity: 0.7; }
+      rect.box          { fill: rgb(240,240,240); stroke: rgb(192,192,192); }
+      line       { stroke: rgb(64,64,64); stroke-width: 1; }
+//    line.min1  { }
+      line.min5  { stroke-width: 2; }
+      line.min01 { stroke: rgb(224,224,224); stroke-width: 1; }
+      text       { font-family: Verdana, Helvetica; font-size: 14px; }
+      text.left  { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: start; }
+      text.right { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: end; }
+      text.min   { font-size: 10px; }
+]]>    </style>
+  </defs>
+  <rect class="background" height="100%" width="100%" x="0" y="0"/>
+  <rect class="box" height="210" width="350" x="20" y="20"/>
+  <text class="min" x="20" y="15">0min</text>
+  <line class="min5" x1="20" x2="20" y1="20" y2="230"/>
+  <line class="min01" x1="30" x2="30" y1="20" y2="230"/>
+  <line class="min01" x1="40" x2="40" y1="20" y2="230"/>
+  <line class="min01" x1="50" x2="50" y1="20" y2="230"/>
+  <line class="min01" x1="60" x2="60" y1="20" y2="230"/>
+  <text class="min" x="70" y="15">5min</text>
+  <line class="min5" x1="70" x2="70" y1="20" y2="230"/>
+  <line class="min01" x1="80" x2="80" y1="20" y2="230"/>
+  <line class="min01" x1="90" x2="90" y1="20" y2="230"/>
+  <line class="min01" x1="100" x2="100" y1="20" y2="230"/>
+  <line class="min01" x1="110" x2="110" y1="20" y2="230"/>
+  <text class="min" x="120" y="15">10min</text>
+  <line class="min5" x1="120" x2="120" y1="20" y2="230"/>
+  <line class="min01" x1="130" x2="130" y1="20" y2="230"/>
+  <line class="min01" x1="140" x2="140" y1="20" y2="230"/>
+  <line class="min01" x1="150" x2="150" y1="20" y2="230"/>
+  <line class="min01" x1="160" x2="160" y1="20" y2="230"/>
+  <text class="min" x="170" y="15">15min</text>
+  <line class="min5" x1="170" x2="170" y1="20" y2="230"/>
+  <line class="min01" x1="180" x2="180" y1="20" y2="230"/>
+  <line class="min01" x1="190" x2="190" y1="20" y2="230"/>
+  <line class="min01" x1="200" x2="200" y1="20" y2="230"/>
+  <line class="min01" x1="210" x2="210" y1="20" y2="230"/>
+  <text class="min" x="220" y="15">20min</text>
+  <line class="min5" x1="220" x2="220" y1="20" y2="230"/>
+  <line class="min01" x1="230" x2="230" y1="20" y2="230"/>
+  <line class="min01" x1="240" x2="240" y1="20" y2="230"/>
+  <line class="min01" x1="250" x2="250" y1="20" y2="230"/>
+  <line class="min01" x1="260" x2="260" y1="20" y2="230"/>
+  <text class="min" x="270" y="15">25min</text>
+  <line class="min5" x1="270" x2="270" y1="20" y2="230"/>
+  <line class="min01" x1="280" x2="280" y1="20" y2="230"/>
+  <line class="min01" x1="290" x2="290" y1="20" y2="230"/>
+  <line class="min01" x1="300" x2="300" y1="20" y2="230"/>
+  <line class="min01" x1="310" x2="310" y1="20" y2="230"/>
+  <text class="min" x="320" y="15">30min</text>
+  <line class="min5" x1="320" x2="320" y1="20" y2="230"/>
+  <line class="min01" x1="330" x2="330" y1="20" y2="230"/>
+  <line class="min01" x1="340" x2="340" y1="20" y2="230"/>
+  <line class="min01" x1="350" x2="350" y1="20" y2="230"/>
+  <line class="min01" x1="360" x2="360" y1="20" y2="230"/>
+  <rect class="success" height="20" width="316.2968333333333" x="20.0" y="25"/>
+  <text class="min" x="25.0" y="39">Gerrit-verifier-change#24508</text>
+  <rect class="success" height="20" width="102.44116666666667" x="31.654333333333334" y="55"/>
+  <text class="min" x="36.654333333333334" y="69">Gerrit-codestyle#17306</text>
+  <rect class="success" height="20" width="91.32033333333334" x="31.918" y="85"/>
+  <text class="min" x="36.918" y="99">Gerrit-codestyle#17307</text>
+  <rect class="success" height="20" width="91.2715" x="33.470666666666666" y="115"/>
+  <text class="min" x="38.470666666666666" y="129">Gerrit-codestyle#17308</text>
+  <rect class="success" height="20" width="291.13533333333334" x="36.654333333333334" y="145"/>
+  <text class="min" x="41.654333333333334" y="159">Gerrit-verifier-bazel#39806</text>
+  <rect class="success" height="20" width="202.69949999999997" x="42.10666666666667" y="175"/>
+  <text class="min" x="47.10666666666667" y="189">Gerrit-verifier-bazel#39807</text>
+  <rect class="success" height="20" width="293.7873333333333" x="42.10666666666667" y="205"/>
+  <text class="min" x="47.10666666666667" y="219">Gerrit-verifier-bazel#39808</text>
+</svg>
