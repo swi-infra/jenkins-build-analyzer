@@ -102,7 +102,7 @@ class SvgPrinter:
                          size=(duration_px, self.build_height - 2*self.build_padding),
                          class_=class_name))
 
-        dwg.add(dwg.text("%s#%d" % (build.job_name, build.build_number),
+        dwg.add(dwg.text("%s#%s" % (build.job_name, build.build_number),
                          insert=(x + 5, y + self.build_height - self.build_padding - 6),
                          class_="min"))
 

@@ -18,7 +18,7 @@ class JobNotFoundException(Exception):
 
     def __init__(self, job_info):
 
-        super(JobNotFoundException, self).__init__("Job %s#%d not found" % (job_info.job_name, job_info.build_number))
+        super(JobNotFoundException, self).__init__("Job %s#%s not found" % (job_info.job_name, job_info.build_number))
 
 class JobInfo:
 
@@ -71,7 +71,7 @@ class JobInfo:
         self.__duration = int(tree.find('./duration').text)
         self.__result = tree.find('./result').text
 
-        logger.debug("%s#%d: %s %d %d %s" % (self.job_name, self.build_number, self.__job_type,
+        logger.debug("%s#%s: %s %d %d %s" % (self.job_name, self.build_number, self.__job_type,
                                                                                self.__timestamp,
                                                                                self.__duration,
                                                                                self.__result))
@@ -107,7 +107,7 @@ class JobInfo:
             self.__sub_builds = []
             return
 
-        url = '/'.join([self.url, 'job', self.job_name, str(self.build_number), 'consoleText'])
+        url = '/'.join([self.url, 'job', self.job_name, self.build_number, 'consoleText'])
         logger.info("Fetching log from %s" % url)
 
         headers = {'Connection': 'close'}
@@ -131,8 +131,8 @@ class JobInfo:
             logger.debug("Line: %s" % line)
 
             job = m.group(1)
-            build_number = int(m.group(2))
-            logger.debug("Sub-build: %s %d" % (job, build_number))
+            build_number = m.group(2)
+            logger.debug("Sub-build: %s#%s" % (job, build_number))
 
             try:
                 job = JobInfo(self.url, job, build_number)
@@ -141,7 +141,7 @@ class JobInfo:
             except JobNotFoundException as e:
                 logger.error(e)
 
-        logger.info("%s#%d: %d sub-build(s)" % (self.job_name, self.build_number, len(self.__sub_builds)))
+        logger.info("%s#%s: %d sub-build(s)" % (self.job_name, self.build_number, len(self.__sub_builds)))
 
     def sub_builds(self):
         if self.__sub_builds == None:

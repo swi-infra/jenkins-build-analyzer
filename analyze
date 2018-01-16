@@ -13,7 +13,7 @@ parser.add_argument('-u', '--url', dest='url',
                     help="URL of the Jenkins server")
 parser.add_argument('-j', '--job', dest='job',
                     help="Job name")
-parser.add_argument('-b', '--build', dest='build_number', type=int,
+parser.add_argument('-b', '--build', dest='build_number', default="lastCompletedBuild",
                     help="Build number")
 
 # Output
@@ -22,7 +22,7 @@ parser.add_argument('-o', '--output', dest='output',
 
 args = parser.parse_args()
 
-if not args.url or not args.job or not args.build_number or not args.output:
+if not args.url or not args.job or not args.output:
     print("A required argument has not been provided.", file=sys.stderr)
     parser.print_help()
     sys.exit(1)
