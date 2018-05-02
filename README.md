@@ -25,6 +25,11 @@ pip install -r requirements.txt
 
 3. Run against an existing Jenkins build
 ```
+./analyze --url https://gerrit-ci.gerritforge.com/job/Gerrit-master/3185/ \
+          --output test.svg
+```
+OR
+```
 ./analyze --url https://gerrit-ci.gerritforge.com \
           --job Gerrit-verifier-change \
           --build 24508 \

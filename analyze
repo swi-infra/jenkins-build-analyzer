@@ -1,10 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import argparse
 import sys
 
 from src.job_info import JobInfoFetcher
 from src.svg_printer import SvgPrinter
+from urllib.parse import urlsplit, urljoin
 
 parser = argparse.ArgumentParser(description="Analyze a Jenkins build and print a time graph")
 
@@ -22,12 +23,34 @@ parser.add_argument('-o', '--output', dest='output',
 
 args = parser.parse_args()
 
-if not args.url or not args.job or not args.output:
+url = args.url
+job = args.job
+build_number = args.build_number
+
+if url and not job:
+    # Try to parse the URL
+    if '/job/' in url:
+        parsed = urlsplit(url)
+
+        path = parsed.path.split("/job/")
+
+        # Jenkins URL
+        full_path = path[0]
+        if '/view/' in parsed.path:
+            full_path = parsed.path.split("/view/")[0]
+        url = urljoin(parsed.geturl(), '/' + full_path)
+
+        # Job Name & Build Number
+        info = path[1].split('/')
+        job = info[0]
+        build_number = info[1]
+
+if not url or not job or not args.output:
     print("A required argument has not been provided.", file=sys.stderr)
     parser.print_help()
     sys.exit(1)
 
-job_info = JobInfoFetcher.fetch(args.url, args.job, args.build_number)
+job_info = JobInfoFetcher.fetch(url, job, build_number)
 
 printer = SvgPrinter(job_info)
 printer.print(args.output)

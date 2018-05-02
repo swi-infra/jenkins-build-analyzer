@@ -1,8 +1,8 @@
 import urllib3
-import os
 import xml.etree.ElementTree as ET
 import re
-import coloredlogs, logging
+import logging
+from urllib.parse import urljoin
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,9 @@ class JobInfo:
 
         self.__sub_builds = None
         self.__all_builds = None
+        self.__tasks = None
+
+        self.__console_log = None
 
         if fetch_on_init:
             self.fetch()
@@ -41,11 +44,12 @@ class JobInfo:
     def fetch(self):
         self.__fetch_info()
         self.__fetch_sub_builds()
+        #self.__determine_sub_tasks()
 
     # Retrieve the XML from Jenkins that contains some info about
     # the build.
     def __fetch_info(self):
-        url = '/'.join([self.url, 'job', self.job_name, str(self.build_number), 'api/xml'])
+        url = urljoin(self.url, '/'.join(['job', self.job_name, str(self.build_number), 'api/xml']))
         logger.info("Fetching info from %s" % url)
 
         content = pool_manager.urlopen('GET', url)
@@ -104,18 +108,23 @@ class JobInfo:
 
         return self.__result
 
+    def console_log(self):
+        if self.__console_log is None:
+            url = '/'.join([self.url, 'job', self.job_name, self.build_number, 'consoleText'])
+            logger.info("Fetching log from %s" % url)
+
+            content = pool_manager.urlopen('GET', url)
+            self.__console_log = content.data.decode()
+
+        return self.__console_log
+
+
     # Retreive the 'sub-builds', which are launched from this job.
     def __fetch_sub_builds(self):
         if self.job_type() != 'pipeline' and \
            self.job_type() != 'buildFlow':
             self.__sub_builds = []
             return
-
-        url = '/'.join([self.url, 'job', self.job_name, self.build_number, 'consoleText'])
-        logger.info("Fetching log from %s" % url)
-
-        content = pool_manager.urlopen('GET', url)
-        raw_data = content.data.decode()
 
         self.__sub_builds = []
 
@@ -125,7 +134,7 @@ class JobInfo:
         elif self.job_type() == 'buildFlow':
             pattern = re.compile(" *Build (.+) #(\d+) started")
 
-        for line in raw_data.splitlines():
+        for line in self.console_log().splitlines():
 
             m = pattern.match(line)
             if not m:
@@ -146,6 +155,10 @@ class JobInfo:
 
         logger.info("%s#%s: %d sub-build(s)" % (self.job_name, self.build_number, len(self.__sub_builds)))
 
+    def __determine_tasks(self):
+        for analyser in TaskAnalyser.analysers():
+            self.__tasks += analyser.parse(self)
+
     def sub_builds(self):
         if self.__sub_builds == None:
             self.__fetch_sub_builds()
@@ -162,3 +175,4 @@ class JobInfo:
             self.__all_builds = blds
 
         return self.__all_builds
+
