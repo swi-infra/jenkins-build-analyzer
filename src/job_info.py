@@ -22,10 +22,11 @@ class JobNotFoundException(Exception):
 
 class JobInfo:
 
-    def __init__(self, url, job_name, build_number, fetch_on_init=True):
+    def __init__(self, url, job_name, build_number, stage=None, fetch_on_init=True):
         self.url = url
         self.job_name = job_name
         self.build_number = build_number
+        self.stage = stage
 
         self.__job_type = None
         self.__timestamp = None
@@ -130,9 +131,9 @@ class JobInfo:
 
         pattern = None
         if self.job_type() == 'pipeline':
-            pattern = re.compile("(?:\[.*\] )?Starting building: (.+) #(\d+)")
+            pattern = re.compile("(?:\[(?P<stage>.*)\] )?Starting building: (?P<job>.+) #(?P<bn>\d+)")
         elif self.job_type() == 'buildFlow':
-            pattern = re.compile(" *Build (.+) #(\d+) started")
+            pattern = re.compile(" *Build (?P<job>.+) #(?P<bn>\d+) started")
 
         for line in self.console_log().splitlines():
 
@@ -142,12 +143,16 @@ class JobInfo:
 
             logger.debug("Line: %s" % line)
 
-            job = m.group(1)
-            build_number = m.group(2)
-            logger.debug("Sub-build: %s#%s" % (job, build_number))
+            job = m.group('job')
+            build_number = m.group('bn')
+            stage = m.group('stage')
+            stage_info = ""
+            if stage:
+                stage_info = "[%s]" % stage
+            logger.debug("Sub-build: %s#%s %s" % (job, build_number, stage_info))
 
             try:
-                job = JobInfo(self.url, job, build_number)
+                job = JobInfo(self.url, job, build_number, stage)
                 self.__sub_builds.append(job)
 
             except JobNotFoundException as e:

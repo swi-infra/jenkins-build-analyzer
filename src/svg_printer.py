@@ -118,11 +118,13 @@ class SvgPrinter:
                          size=(duration_px, self.build_height - 2*self.build_padding),
                          class_=class_name))
 
-        dwg.add(dwg.text("%s#%s" % (build.job_name, build.build_number),
+        build_info = ""
+        if build.stage:
+            build_info = "[%s] " % build.stage
+        build_info += "%s#%s" % (build.job_name, build.build_number)
+        dwg.add(dwg.text(build_info,
                          insert=(x + 5, y + self.build_height - self.build_padding - 6),
                          class_="min"))
-
-
 
     def __render_builds(self):
         current_idx = 0
