@@ -30,13 +30,13 @@ STYLES = """
       rect.pipe_other        { stroke: rgb(204,204,204); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(204,204,204); fill-opacity: 0.3; }
       rect.pipe_in_progress  { stroke: rgb(135,205,222); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(135,205,222); fill-opacity: 0.3; }
 
-      rect.type         { fill: rgb(50,50,50); fill-opacity: 0.9; }
-      rect.type_scm     { fill: rgb(255,208,147); fill-opacity: 0.9; }
-      rect.type_docker  { fill: rgb(147,214,255); fill-opacity: 0.9; }
-      rect.type_build   { fill: rgb(255,147,180); fill-opacity: 0.9; }
-      rect.type_test    { fill: rgb(167,147,255); fill-opacity: 0.9; }
-      rect.type_archive { fill: rgb(147,255,221); fill-opacity: 0.9; }
-      rect.type_sca     { fill: rgb(147,201,181); fill-opacity: 0.9; }
+      rect.type         { fill: rgb(50,50,50); fill-opacity: 0.7; }
+      rect.type_scm     { fill: rgb(255,208,147); fill-opacity: 0.7; }
+      rect.type_docker  { fill: rgb(147,214,255); fill-opacity: 0.7; }
+      rect.type_build   { fill: rgb(255,147,180); fill-opacity: 0.7; }
+      rect.type_test    { fill: rgb(167,147,255); fill-opacity: 0.7; }
+      rect.type_archive { fill: rgb(147,255,221); fill-opacity: 0.7; }
+      rect.type_sca     { fill: rgb(147,201,181); fill-opacity: 0.7; }
 
       text       { font-family: Verdana, Helvetica; font-size: 14px; }
       text.left  { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: start; }
@@ -54,7 +54,7 @@ class SvgPrinter:
 
         self.build_padding = 5
         self.build_height = 30
-        self.section_height = 3
+        self.section_height = 2
         self.minute_width = 10
 
         self.__dwg = None
@@ -124,11 +124,15 @@ class SvgPrinter:
         if section.type():
             class_name = "type_%s" % section.type()
 
+        section_index = section.parents_cnt()
+        if section_index >= 4:
+          section_index = 4
+
         x = self.margin + offset_px
         y = self.margin + build_index*self.build_height
 
         dwg.add(dwg.rect(insert=(x, y + self.build_height - self.build_padding),
-                         size=(duration_px, self.section_height),
+                         size=(duration_px, (1 + section_index)*self.section_height),
                          class_=class_name))
 
     def __render_queue(self, build, build_index):

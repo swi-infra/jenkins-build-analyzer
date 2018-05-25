@@ -44,6 +44,12 @@ class BuildSection:
 
         return (self.end - self.start)  # in us
 
+    def parents_cnt(self):
+        cnt = 0
+        if self.parent != None:
+            cnt = 1 + self.parent.parents_cnt()
+        return cnt
+
 class JobInfo:
 
     def __init__(self, url, job_name, build_number, stage=None, fetch_on_init=True):
