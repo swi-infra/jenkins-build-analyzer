@@ -5,20 +5,39 @@ import math
 
 logger = logging.getLogger(__name__)
 
-STYLES = """rect        { stroke-width: 1; stroke-opacity: 0; }
+STYLES = """
+      rect              { stroke-width: 1; stroke-opacity: 0; }
       rect.background   { fill: rgb(255,255,255); }
+      rect.box          { fill: rgb(240,240,240); stroke: rgb(192,192,192); }
+      line       { stroke: rgb(64,64,64); stroke-width: 1; }
+      line.min5  { stroke: rgb(150,150,150); stroke-width: 1; }
+      line.min60 { stroke: rgb(150,150,150); stroke-width: 2; }
+      line.min01 { stroke: rgb(224,224,224); stroke-width: 1; }
+
+      rect.queue        { fill: rgb(148,111,97); fill-opacity: 0.3; }
+
       rect.aborted      { fill: rgb(190,200,183); fill-opacity: 0.7; }
       rect.success      { fill: rgb(170,255,170); fill-opacity: 0.7; }
       rect.failure      { fill: rgb(255,170,170); fill-opacity: 0.7; }
       rect.unstable     { fill: rgb(255,204,170); fill-opacity: 0.7; }
       rect.other        { fill: rgb(204,204,204); fill-opacity: 0.7; }
       rect.in_progress  { fill: rgb(135,205,222); fill-opacity: 0.7; }
-      rect.box          { fill: rgb(240,240,240); stroke: rgb(192,192,192); }
-      line       { stroke: rgb(64,64,64); stroke-width: 1; }
-//    line.min1  { }
-      line.min5  { stroke: rgb(150,150,150); stroke-width: 1; }
-      line.min60 { stroke: rgb(150,150,150); stroke-width: 2; }
-      line.min01 { stroke: rgb(224,224,224); stroke-width: 1; }
+
+      rect.pipe_aborted      { stroke: rgb(190,200,183); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(190,200,183); fill-opacity: 0.3; }
+      rect.pipe_success      { stroke: rgb(170,255,170); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(170,255,170); fill-opacity: 0.3; }
+      rect.pipe_failure      { stroke: rgb(255,170,170); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(255,170,170); fill-opacity: 0.3; }
+      rect.pipe_unstable     { stroke: rgb(255,204,170); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(255,204,170); fill-opacity: 0.3; }
+      rect.pipe_other        { stroke: rgb(204,204,204); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(204,204,204); fill-opacity: 0.3; }
+      rect.pipe_in_progress  { stroke: rgb(135,205,222); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(135,205,222); fill-opacity: 0.3; }
+
+      rect.type         { fill: rgb(50,50,50); fill-opacity: 0.9; }
+      rect.type_scm     { fill: rgb(255,208,147); fill-opacity: 0.9; }
+      rect.type_docker  { fill: rgb(147,214,255); fill-opacity: 0.9; }
+      rect.type_build   { fill: rgb(255,147,180); fill-opacity: 0.9; }
+      rect.type_test    { fill: rgb(167,147,255); fill-opacity: 0.9; }
+      rect.type_archive { fill: rgb(147,255,221); fill-opacity: 0.9; }
+      rect.type_sca     { fill: rgb(147,201,181); fill-opacity: 0.9; }
+
       text       { font-family: Verdana, Helvetica; font-size: 14px; }
       text.left  { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: start; }
       text.right { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: end; }
@@ -31,16 +50,18 @@ class SvgPrinter:
         self.job_info = job_info
 
         self.margin = 20
+        self.extra_width = 200
 
         self.build_padding = 5
         self.build_height = 30
+        self.section_height = 3
         self.minute_width = 10
 
         self.__dwg = None
 
     def __determine_sizes(self):
 
-        self.base_timestamp = self.job_info.timestamp()
+        self.base_timestamp = self.job_info.start()
 
         # Height based on number of builds to show
         self.box_height = self.build_height*len(self.job_info.all_builds())
@@ -50,13 +71,12 @@ class SvgPrinter:
         self.max_duration = self.job_info.duration()
         if self.job_info.result() == "IN_PROGRESS":
             for build in self.job_info.all_builds():
-                self.max_duration = max(self.max_duration, build.timestamp() + build.duration() - self.base_timestamp)
+                self.max_duration = max(self.max_duration, build.start() + build.duration() - self.base_timestamp)
 
         self.max_duration = math.ceil(self.max_duration / 1000 / 60 / 5) * 5 # in minutes, rounded up
 
         self.box_width = self.minute_width*self.max_duration
-        self.total_width = 2*self.margin + self.box_width
-
+        self.total_width = 2*self.margin + self.box_width + self.extra_width
 
         logger.debug("Total: %d x %d" % (self.total_height, self.total_width))
 
@@ -87,10 +107,57 @@ class SvgPrinter:
 
             self.current_pos += self.minute_width
 
+    def __render_section(self, section, build_index):
+        dwg = self.__dwg
+
+        offset = (section.start - self.base_timestamp) / 1000 / 60
+        if offset < 0:
+            offset = 0
+        offset_px = offset * self.minute_width
+
+        duration = section.duration() / 1000 / 60
+        if not section.end:
+            duration = self.max_duration - offset
+        duration_px = duration * self.minute_width
+
+        class_name = "type"
+        if section.type():
+            class_name = "type_%s" % section.type()
+
+        x = self.margin + offset_px
+        y = self.margin + build_index*self.build_height
+
+        dwg.add(dwg.rect(insert=(x, y + self.build_height - self.build_padding),
+                         size=(duration_px, self.section_height),
+                         class_=class_name))
+
+    def __render_queue(self, build, build_index):
+        dwg = self.__dwg
+
+        if build.queueing_duration() == 0:
+            return
+
+        offset = (build.start() - build.queueing_duration() - self.base_timestamp) / 1000 / 60
+        offset_px = offset * self.minute_width
+
+        duration = build.queueing_duration() / 1000 / 60
+        duration_px = duration * self.minute_width
+
+        class_name = "queue"
+
+        x = self.margin + offset_px
+        y = self.margin + build_index*self.build_height
+
+        dwg.add(dwg.rect(insert=(x, y + self.build_padding),
+                         size=(duration_px, self.build_height - 2*self.build_padding),
+                         class_=class_name))
+
     def __render_build(self, build, index):
         dwg = self.__dwg
 
-        offset = (build.timestamp() - self.base_timestamp)  / 1000 / 60
+        self.__render_queue(build, index)
+
+        offset = (build.start() - self.base_timestamp)  / 1000 / 60
         offset_px = offset * self.minute_width
 
         duration = build.duration() / 1000 / 60
@@ -110,13 +177,19 @@ class SvgPrinter:
         elif build.result() == "IN_PROGRESS":
             class_name = 'in_progress'
 
+        if build.job_type() == 'pipeline' or \
+           build.job_type() == 'buildFlow':
+          class_name = "pipe_%s" % class_name
+
         x = self.margin + offset_px
         y = self.margin + index*self.build_height
-
 
         dwg.add(dwg.rect(insert=(x, y + self.build_padding),
                          size=(duration_px, self.build_height - 2*self.build_padding),
                          class_=class_name))
+
+        for section in build.sections():
+            self.__render_section(section, index)
 
         build_info = ""
         if build.stage:

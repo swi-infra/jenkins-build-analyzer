@@ -20,6 +20,30 @@ class JobNotFoundException(Exception):
 
         super(JobNotFoundException, self).__init__("Job %s#%s not found" % (job_info.job_name, job_info.build_number))
 
+class BuildSection:
+
+    def __init__(self, name, section_type=None):
+        self.name = name
+        self.__type = section_type
+        self.parent = None
+        self.start = None
+        self.end = None
+
+    def type(self):
+        if self.__type:
+            return self.__type
+
+        if self.parent:
+            return self.parent.type()
+
+        return None
+
+    def duration(self):
+        if not self.start or not self.end:
+            return 0
+
+        return (self.end - self.start)  # in us
+
 class JobInfo:
 
     def __init__(self, url, job_name, build_number, stage=None, fetch_on_init=True):
@@ -29,13 +53,14 @@ class JobInfo:
         self.stage = stage
 
         self.__job_type = None
-        self.__timestamp = None
+        self.__queueing_duration = None
+        self.__start = None
         self.__duration = None
         self.__result = None
 
         self.__sub_builds = None
         self.__all_builds = None
-        self.__tasks = None
+        self.__sections = None
 
         self.__console_log = None
 
@@ -45,12 +70,12 @@ class JobInfo:
     def fetch(self):
         self.__fetch_info()
         self.__fetch_sub_builds()
-        #self.__determine_sub_tasks()
+        self.__determine_sections()
 
     # Retrieve the XML from Jenkins that contains some info about
     # the build.
     def __fetch_info(self):
-        url = urljoin(self.url, '/'.join(['job', self.job_name, str(self.build_number), 'api/xml']))
+        url = urljoin(self.url, '/'.join(['job', self.job_name, str(self.build_number), 'api/xml?depth=3']))
         logger.info("Fetching info from %s" % url)
 
         content = pool_manager.urlopen('GET', url)
@@ -71,7 +96,7 @@ class JobInfo:
         else:
             self.__job_type = job_type
 
-        self.__timestamp = int(tree.find('./timestamp').text)
+        self.__start = int(tree.find('./timestamp').text)
         self.__duration = int(tree.find('./duration').text)
         if tree.find('./result') != None:
             self.__result = tree.find('./result').text
@@ -80,10 +105,15 @@ class JobInfo:
         else:
             self.__result = 'UNKNOWN'
 
-        logger.debug("%s#%s: %s %d %d %s" % (self.job_name, self.build_number, self.__job_type,
-                                                                               self.__timestamp,
-                                                                               self.__duration,
-                                                                               self.__result))
+        self.__queueing_duration = 0
+        if tree.find('./action/queuingDurationMillis') != None:
+            self.__queueing_duration = int(tree.find('./action/queuingDurationMillis').text)
+
+        logger.debug("%s#%s: %s %d %d %d %s" % (self.job_name, self.build_number, self.__job_type,
+                                                                                  self.__start,
+                                                                                  self.__queueing_duration,
+                                                                                  self.__duration,
+                                                                                  self.__result))
 
     def job_type(self):
         if not self.__job_type:
@@ -91,11 +121,17 @@ class JobInfo:
 
         return self.__job_type
 
-    def timestamp(self):
-        if not self.__timestamp:
+    def start(self):
+        if not self.__start:
             self.__fetch_info()
 
-        return self.__timestamp
+        return self.__start
+
+    def queueing_duration(self):
+        if not self.__queueing_duration:
+            self.__fetch_info()
+
+        return self.__queueing_duration
 
     def duration(self):
         if not self.__duration:
@@ -115,25 +151,24 @@ class JobInfo:
             logger.info("Fetching log from %s" % url)
 
             content = pool_manager.urlopen('GET', url)
-            self.__console_log = content.data.decode()
+            self.__console_log = content.data.decode('latin-1')
 
         return self.__console_log
 
 
     # Retreive the 'sub-builds', which are launched from this job.
     def __fetch_sub_builds(self):
+        self.__sub_builds = []
+
         if self.job_type() != 'pipeline' and \
            self.job_type() != 'buildFlow':
-            self.__sub_builds = []
             return
-
-        self.__sub_builds = []
 
         pattern = None
         if self.job_type() == 'pipeline':
             pattern = re.compile("(?:\[(?P<stage>.*)\] )?Starting building: (?P<job>.+) #(?P<bn>\d+)")
         elif self.job_type() == 'buildFlow':
-            pattern = re.compile(" *Build (?P<job>.+) #(?P<bn>\d+) started")
+            pattern = re.compile("(?P<stage>) *Build (?P<job>.+) #(?P<bn>\d+) started")
 
         for line in self.console_log().splitlines():
 
@@ -160,9 +195,49 @@ class JobInfo:
 
         logger.info("%s#%s: %d sub-build(s)" % (self.job_name, self.build_number, len(self.__sub_builds)))
 
-    def __determine_tasks(self):
-        for analyser in TaskAnalyser.analysers():
-            self.__tasks += analyser.parse(self)
+    def __determine_sections(self):
+        self.__sections = []
+
+        if self.job_type() != 'freestyle':
+            return
+
+        pattern = re.compile("^\[section:(?P<name>[^\]]*)\] (?P<boundary>start|end)? *"
+                                                           "(time=(?P<time>[0-9]*))? *"
+                                                           "(type=(?P<type>[a-z]*))? *"
+                                                           "(.*)")
+        current = None
+
+        for line in self.console_log().splitlines():
+
+            m = pattern.match(line)
+            if not m:
+                continue
+
+            boundary = m.group("boundary")
+            name = m.group("name")
+            section_type = m.group("type")
+            time = int(m.group("time")) * 1000
+            if boundary == "start":
+                # Start
+                new = BuildSection(name, section_type)
+                self.__sections.append(new)
+
+                if current:
+                    new.parent = current
+
+                current = new
+                current.start = time
+            elif boundary == "end":
+                # End
+                current.end = time
+                current = current.parent
+            else:
+                raise Exception("Unknown boundary %s" % boundary)
+
+        for section in self.__sections:
+            logger.debug("Section: %s %s %s" % (section.name,
+                                                section.type(),
+                                                section.duration()))
 
     def sub_builds(self):
         if self.__sub_builds == None:
@@ -180,4 +255,7 @@ class JobInfo:
             self.__all_builds = blds
 
         return self.__all_builds
+
+    def sections(self):
+        return self.__sections
 
