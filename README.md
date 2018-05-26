@@ -30,6 +30,11 @@ pip install -r requirements.txt
 ```
 OR
 ```
+./analyze --url https://gerrit-ci.gerritforge.com/job/Gerrit-master/3185/ \
+          --output test.png
+```
+OR
+```
 ./analyze --url https://gerrit-ci.gerritforge.com \
           --job Gerrit-verifier-change \
           --build 24508 \

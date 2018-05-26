@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<svg baseProfile="full" height="130" version="1.1" width="440" xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg baseProfile="full" height="130" version="1.1" width="490" xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:xlink="http://www.w3.org/1999/xlink">
   <defs>
     <style type="text/css">
-<![CDATA[rect        { stroke-width: 1; stroke-opacity: 0; }
+<![CDATA[
+      rect              { stroke-width: 1; stroke-opacity: 0; }
       rect.background   { fill: rgb(255,255,255); }
       rect.box          { fill: rgb(240,240,240); stroke: rgb(192,192,192); }
       line       { stroke: rgb(64,64,64); stroke-width: 1; }
@@ -19,13 +20,20 @@
       rect.other        { fill: rgb(204,204,204); fill-opacity: 0.7; }
       rect.in_progress  { fill: rgb(135,205,222); fill-opacity: 0.7; }
 
-      rect.type         { fill: rgb(50,50,50); fill-opacity: 0.9; }
-      rect.type_scm     { fill: rgb(255,208,147); fill-opacity: 0.9; }
-      rect.type_docker  { fill: rgb(147,214,255); fill-opacity: 0.9; }
-      rect.type_build   { fill: rgb(255,147,180); fill-opacity: 0.9; }
-      rect.type_test    { fill: rgb(167,147,255); fill-opacity: 0.9; }
-      rect.type_archive { fill: rgb(147,255,221); fill-opacity: 0.9; }
-      rect.type_sca     { fill: rgb(147,201,181); fill-opacity: 0.9; }
+      rect.pipe_aborted      { stroke: rgb(190,200,183); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(190,200,183); fill-opacity: 0.3; }
+      rect.pipe_success      { stroke: rgb(170,255,170); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(170,255,170); fill-opacity: 0.3; }
+      rect.pipe_failure      { stroke: rgb(255,170,170); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(255,170,170); fill-opacity: 0.3; }
+      rect.pipe_unstable     { stroke: rgb(255,204,170); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(255,204,170); fill-opacity: 0.3; }
+      rect.pipe_other        { stroke: rgb(204,204,204); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(204,204,204); fill-opacity: 0.3; }
+      rect.pipe_in_progress  { stroke: rgb(135,205,222); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(135,205,222); fill-opacity: 0.3; }
+
+      rect.type         { fill: rgb(50,50,50); fill-opacity: 0.7; }
+      rect.type_scm     { fill: rgb(255,208,147); fill-opacity: 0.7; }
+      rect.type_docker  { fill: rgb(147,214,255); fill-opacity: 0.7; }
+      rect.type_build   { fill: rgb(255,147,180); fill-opacity: 0.7; }
+      rect.type_test    { fill: rgb(167,147,255); fill-opacity: 0.7; }
+      rect.type_archive { fill: rgb(147,255,221); fill-opacity: 0.7; }
+      rect.type_sca     { fill: rgb(147,201,181); fill-opacity: 0.7; }
 
       text       { font-family: Verdana, Helvetica; font-size: 14px; }
       text.left  { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: start; }
@@ -34,7 +42,7 @@
 ]]>    </style>
   </defs>
   <rect class="background" height="100%" width="100%" x="0" y="0"/>
-  <rect class="box" height="90" width="200" x="20" y="20"/>
+  <rect class="box" height="90" width="250" x="20" y="20"/>
   <text class="min" x="20" y="15">0min</text>
   <line class="min60" x1="20" x2="20" y1="20" y2="110"/>
   <line class="min01" x1="30" x2="30" y1="20" y2="110"/>
@@ -59,10 +67,16 @@
   <line class="min01" x1="190" x2="190" y1="20" y2="110"/>
   <line class="min01" x1="200" x2="200" y1="20" y2="110"/>
   <line class="min01" x1="210" x2="210" y1="20" y2="110"/>
-  <rect class="success" height="20" width="177.25849999999997" x="20.0" y="25"/>
+  <text class="min" x="220" y="15">20min</text>
+  <line class="min5" x1="220" x2="220" y1="20" y2="110"/>
+  <line class="min01" x1="230" x2="230" y1="20" y2="110"/>
+  <line class="min01" x1="240" x2="240" y1="20" y2="110"/>
+  <line class="min01" x1="250" x2="250" y1="20" y2="110"/>
+  <line class="min01" x1="260" x2="260" y1="20" y2="110"/>
+  <rect class="pipe_success" height="20" width="212.4801666666667" x="20.0" y="25"/>
   <text class="min" x="25.0" y="39">Gerrit-verifier-change#lastBuild</text>
-  <rect class="success" height="20" width="13.063333333333333" x="40.833" y="55"/>
-  <text class="min" x="45.833" y="69">Gerrit-codestyle#25726</text>
-  <rect class="success" height="20" width="153.5835" x="43.33283333333334" y="85"/>
-  <text class="min" x="48.33283333333334" y="99">Gerrit-verifier-bazel#48631</text>
+  <rect class="success" height="20" width="203.70049999999998" x="28.333333333333336" y="55"/>
+  <text class="min" x="33.333333333333336" y="69">Gerrit-verifier-bazel#48648</text>
+  <rect class="success" height="20" width="94.28266666666667" x="28.333333333333336" y="85"/>
+  <text class="min" x="33.333333333333336" y="99">Gerrit-codestyle#25743</text>
 </svg>

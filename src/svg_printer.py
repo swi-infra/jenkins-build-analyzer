@@ -2,6 +2,8 @@
 import svgwrite
 import coloredlogs, logging
 import math
+import tempfile
+import cairosvg
 
 logger = logging.getLogger(__name__)
 
@@ -209,9 +211,7 @@ class SvgPrinter:
             self.__render_build(build, current_idx)
             current_idx += 1
 
-    def print(self, output):
-        print("Output to %s" % output)
-
+    def print_svg(self, output):
         self.__determine_sizes()
 
         self.__dwg = svgwrite.Drawing(filename=output,
@@ -236,4 +236,27 @@ class SvgPrinter:
 
         # Save
         dwg.save(pretty=True)
+
+    def print_png(self, output):
+
+        # First print as svg in a temporary file
+        f = tempfile.NamedTemporaryFile(delete=True)
+        self.print_svg(f.name)
+
+        # Convert that file from svg to png
+        cairosvg.svg2png(url=f.name, write_to=output)
+
+        # Remove temporary file
+        f.close()
+
+    def print(self, output):
+        print("Output to %s" % output)
+
+        if output.endswith(".svg"):
+            self.print_svg(output)
+        elif output.endswith(".png"):
+            self.print_png(output)
+        else:
+            raise Exception("Format not supported")
+
 
