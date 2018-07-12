@@ -6,6 +6,8 @@ import tempfile
 import cairosvg
 import base64
 
+from datetime import datetime, timedelta
+
 logger = logging.getLogger(__name__)
 
 STYLES = """
@@ -45,6 +47,7 @@ STYLES = """
       text.left  { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: start; }
       text.right { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: end; }
       text.min   { font-size: 10px; }
+      text.time  { font-size: 5px; }
 """
 
 HTML_TMPL = """<!DOCTYPE html>
@@ -153,6 +156,22 @@ class SvgPrinter:
                          size=(duration_px, (1 + section_index)*self.section_height),
                          class_=class_name))
 
+    def __get_time(self, milliseconds):
+
+        d = datetime(1,1,1) + timedelta(milliseconds=int(milliseconds))
+        time = [d.day -1 , d.hour, d.minute, d.second + (milliseconds % 1000)/1000.0]
+        time_suffix = ['d', 'h', 'm', 's']
+
+        val = []
+        for i in range(len(time)):
+            if time[i] > 0:
+                if time_suffix[i] == 's':
+                    s = "%.1f%s" % (time[i], time_suffix[i])
+                else:
+                    s = "%d%s" % (time[i], time_suffix[i])
+                val.append(s)
+        return " ".join(val)
+
     def __render_queue(self, build, build_index):
         dwg = self.__dwg
 
@@ -233,8 +252,17 @@ class SvgPrinter:
             build_info = "[%s] " % build.stage
         build_info += build_id
         dwg.add(dwg.text(build_info,
-                         insert=(x + 5, y + self.build_height - self.build_padding - 6),
+                         insert=(x + 5, y + self.build_height - self.build_padding - 8),
                          class_="min"))
+
+
+        queue_time = self.__get_time(build.queueing_duration())
+        exec_time = self.__get_time(build.duration())
+        build_time = "[queue: %s; build: %s]" % (queue_time, exec_time)
+
+        dwg.add(dwg.text(build_time,
+                         insert=(x + 5, y + self.build_height - self.build_padding - 1),
+                         class_="time"))
 
     def __render_builds(self):
         current_idx = 0
