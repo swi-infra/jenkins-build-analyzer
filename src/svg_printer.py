@@ -58,9 +58,9 @@ HTML_TMPL = """<!DOCTYPE html>
         .tooltip {
             display: none;
             position: absolute;
-            border: 1px solid rgba(50, 50, 50, .7);
+            border: 1px solid rgba(50, 50, 50, .8);
             border-radius: 3px;
-            background: rgba(50, 50, 50, .6);
+            background: rgba(50, 50, 50, .7);
             color: white;
             font-family: "Arial";
             font-size: small;
@@ -95,11 +95,15 @@ $(function() {
         fillOpacity: 0.1
     });
     $('area').mousemove(function(e) {
-        var left = e.pageX;
-        var top = e.pageY;
         var tooltip = $(this).data("tooltip");
-        $(tooltip).css('top', top + 5);
-        $(tooltip).css('left', left + 5);
+        var left = e.pageX + 5;
+        var top = e.pageY + 5;
+        if( (top + $(tooltip).height()) > window.innerHeight)
+        {
+            top = e.pageY - 15 - $(tooltip).height();
+        }
+        $(tooltip).css('top', top);
+        $(tooltip).css('left', left);
         $(tooltip).fadeIn();
     });
     $('area').mouseout(function(e) {
