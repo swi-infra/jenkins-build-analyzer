@@ -35,6 +35,11 @@ OR
 ```
 OR
 ```
+./analyze --url https://gerrit-ci.gerritforge.com/job/Gerrit-master/3185/ \
+          --output test.html
+```
+OR
+```
 ./analyze --url https://gerrit-ci.gerritforge.com \
           --job Gerrit-verifier-change \
           --build 24508 \

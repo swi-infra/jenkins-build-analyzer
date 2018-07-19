@@ -19,7 +19,7 @@ parser.add_argument('-b', '--build', dest='build_number', default="lastCompleted
 
 # Output
 parser.add_argument('-o', '--output', dest='output',
-                    help="Output path in SVG or PNG format")
+                    help="Output path in SVG or PNG or HTML format")
 
 args = parser.parse_args()
 

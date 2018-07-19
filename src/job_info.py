@@ -78,10 +78,13 @@ class JobInfo:
         self.__fetch_sub_builds()
         self.__determine_sections()
 
+    def build_url(self, extra=""):
+        return urljoin(self.url, '/'.join(['job', self.job_name, str(self.build_number), extra]))
+
     # Retrieve the XML from Jenkins that contains some info about
     # the build.
     def __fetch_info(self):
-        url = urljoin(self.url, '/'.join(['job', self.job_name, str(self.build_number), 'api/xml?depth=3']))
+        url = self.build_url('api/xml?depth=3')
         logger.info("Fetching info from %s" % url)
 
         content = pool_manager.urlopen('GET', url)

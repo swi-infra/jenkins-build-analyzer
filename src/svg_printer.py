@@ -4,6 +4,7 @@ import coloredlogs, logging
 import math
 import tempfile
 import cairosvg
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,19 @@ STYLES = """
       text.min   { font-size: 10px; }
 """
 
+HTML_TMPL = """<!DOCTYPE html>
+<html>
+<head>
+    <title>%s</title>
+</head>
+<body>
+    <img usemap="#map" class="map" src="%s" />
+    <map name="map">
+        %s
+    </map>
+</body>
+</html>"""
+
 class SvgPrinter:
 
     def __init__(self, job_info):
@@ -58,6 +72,8 @@ class SvgPrinter:
         self.build_height = 30
         self.section_height = 2
         self.minute_width = 10
+
+        self.rect_builds = {}
 
         self.__dwg = None
 
@@ -190,8 +206,16 @@ class SvgPrinter:
         x = self.margin + offset_px
         y = self.margin + index*self.build_height
 
-        dwg.add(dwg.rect(insert=(x, y + self.build_padding),
-                         size=(duration_px, self.build_height - 2*self.build_padding),
+        build_id = "%s#%s" % (build.job_name, build.build_number)
+
+        build_r = {
+            "build": build,
+            "insert": (x, y + self.build_padding),
+            "size": (duration_px, self.build_height - 2*self.build_padding)
+        }
+        self.rect_builds[build_id] = build_r
+        dwg.add(dwg.rect(insert=build_r["insert"],
+                         size=build_r["size"],
                          class_=class_name))
 
         section_max_duration = duration
@@ -207,7 +231,7 @@ class SvgPrinter:
         build_info = ""
         if build.stage:
             build_info = "[%s] " % build.stage
-        build_info += "%s#%s" % (build.job_name, build.build_number)
+        build_info += build_id
         dwg.add(dwg.text(build_info,
                          insert=(x + 5, y + self.build_height - self.build_padding - 6),
                          class_="min"))
@@ -244,17 +268,54 @@ class SvgPrinter:
         # Save
         dwg.save(pretty=True)
 
-    def print_png(self, output):
+    def print_svg_to_tmp(self):
 
         # First print as svg in a temporary file
         f = tempfile.NamedTemporaryFile(delete=True)
         self.print_svg(f.name)
+
+        return f
+
+    def print_png(self, output):
+
+        # First print as svg in a temporary file
+        f = self.print_svg_to_tmp()
 
         # Convert that file from svg to png
         cairosvg.svg2png(url=f.name, write_to=output)
 
         # Remove temporary file
         f.close()
+
+    def print_html(self, output):
+
+        # First print as svg in a temporary file
+        svg_content = None
+        with self.print_svg_to_tmp() as f_svg:
+            svg_content = f_svg.read()
+
+        title = "%s #%s" % (self.job_info.job_name,
+                            self.job_info.build_number)
+
+        img_src = "data:image/svg+xml;base64,%s" % \
+                  u''.join(base64.encodestring(svg_content).decode('utf-8').splitlines())
+
+        map_content = []
+        for build_r in self.rect_builds.values():
+            link = build_r["build"].build_url()
+            area = '<area shape="rect" coords="%d,%d,%d,%d" href="%s" />' % \
+                   (build_r["insert"][0],
+                    build_r["insert"][1],
+                    build_r["insert"][0] + build_r["size"][0],
+                    build_r["insert"][1] + build_r["size"][1],
+                    link)
+            map_content.append(area)
+
+        with open(output, 'w') as f_html:
+            html_content = HTML_TMPL % (title,
+                                        img_src,
+                                        "\n".join(map_content))
+            f_html.write(html_content)
 
     def print(self, output):
         print("Output to %s" % output)
@@ -263,6 +324,8 @@ class SvgPrinter:
             self.print_svg(output)
         elif output.endswith(".png"):
             self.print_png(output)
+        elif output.endswith(".html") or output.endswith(".htm"):
+            self.print_html(output)
         else:
             raise Exception("Format not supported")
 
