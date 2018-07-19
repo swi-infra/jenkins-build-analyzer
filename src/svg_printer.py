@@ -395,6 +395,7 @@ class SvgPrinter:
             link = build.build_url()
             tooltip_id = "tooltip-%s-%s" % (build.job_name,
                                             build.build_number)
+            tooltip_id = tooltip_id.replace('.', '_')
             area = '<area shape="rect" coords="%d,%d,%d,%d" href="%s" data-tooltip="%s"/>' % \
                    (build_r["insert"][0],
                     build_r["insert"][1],
