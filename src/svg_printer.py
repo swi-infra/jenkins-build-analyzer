@@ -54,14 +54,62 @@ HTML_TMPL = """<!DOCTYPE html>
 <html>
 <head>
     <title>%s</title>
+    <style type="text/css">
+        .tooltip {
+            display: none;
+            position: absolute;
+            border: 1px solid rgba(50, 50, 50, .7);
+            border-radius: 3px;
+            background: rgba(50, 50, 50, .6);
+            color: white;
+            font-family: "Arial";
+            font-size: small;
+            padding: 5px;
+        }
+        .failure-cause {
+            padding: 4px;
+            padding-left: 6px;
+            margin: 2px;
+            margin-left: 6px;
+            border-left: 2px solid #eee;
+        }
+    </style>
+    %s
 </head>
 <body>
     <img usemap="#map" class="map" src="%s" />
     <map name="map">
         %s
     </map>
+    %s
 </body>
 </html>"""
+
+MAPHIGHLIGHT_SCRIPT = """
+<script type="text/javascript" src="https://unpkg.com/jquery"></script>
+<script type="text/javascript" src="https://cdn.rawgit.com/kemayo/maphilight/master/jquery.maphilight.min.js"></script>
+<script type="text/javascript">
+$(function() {
+    $('.map').maphilight({
+        stroke: false,
+        fillOpacity: 0.1
+    });
+    $('area').mousemove(function(e) {
+        var left = e.pageX;
+        var top = e.pageY;
+        var tooltip = $(this).data("tooltip");
+        $(tooltip).css('top', top + 5);
+        $(tooltip).css('left', left + 5);
+        $(tooltip).fadeIn();
+    });
+    $('area').mouseout(function(e) {
+        var tooltip = $(this).data("tooltip");
+        if(tooltip) {
+            $(tooltip).fadeOut();
+        }
+    });
+});
+</script>"""
 
 class SvgPrinter:
 
@@ -70,6 +118,10 @@ class SvgPrinter:
 
         self.margin = 20
         self.extra_width = 200
+
+        # Options
+        self.show_time = True
+        self.show_infobox = True
 
         self.build_padding = 5
         self.build_height = 30
@@ -256,13 +308,14 @@ class SvgPrinter:
                          class_="min"))
 
 
-        queue_time = self.__get_time(build.queueing_duration())
-        exec_time = self.__get_time(build.duration())
-        build_time = "[queue: %s; build: %s]" % (queue_time, exec_time)
+        if self.show_time:
+            queue_time = self.__get_time(build.queueing_duration())
+            exec_time = self.__get_time(build.duration())
+            build_time = "[queue: %s; build: %s]" % (queue_time, exec_time)
 
-        dwg.add(dwg.text(build_time,
-                         insert=(x + 5, y + self.build_height - self.build_padding - 1),
-                         class_="time"))
+            dwg.add(dwg.text(build_time,
+                             insert=(x + 5, y + self.build_height - self.build_padding - 1),
+                             class_="time"))
 
     def __render_builds(self):
         current_idx = 0
@@ -317,6 +370,9 @@ class SvgPrinter:
 
     def print_html(self, output):
 
+        # Configure rendering
+        self.show_time = False
+
         # First print as svg in a temporary file
         svg_content = None
         with self.print_svg_to_tmp() as f_svg:
@@ -329,20 +385,48 @@ class SvgPrinter:
                   u''.join(base64.encodestring(svg_content).decode('utf-8').splitlines())
 
         map_content = []
+        tooltips_content = []
         for build_r in self.rect_builds.values():
-            link = build_r["build"].build_url()
-            area = '<area shape="rect" coords="%d,%d,%d,%d" href="%s" />' % \
+            build = build_r["build"]
+            link = build.build_url()
+            tooltip_id = "tooltip-%s-%s" % (build.job_name,
+                                            build.build_number)
+            area = '<area shape="rect" coords="%d,%d,%d,%d" href="%s" data-tooltip="%s"/>' % \
                    (build_r["insert"][0],
                     build_r["insert"][1],
                     build_r["insert"][0] + build_r["size"][0],
                     build_r["insert"][1] + build_r["size"][1],
-                    link)
+                    link,
+                    '#' + tooltip_id)
             map_content.append(area)
+
+            queue_time = self.__get_time(build.queueing_duration())
+            exec_time = self.__get_time(build.duration())
+            tooltip_lines = []
+            tooltip_lines.append("<b>Queue Time:</b> %s<br/>" % queue_time)
+            tooltip_lines.append("<b>Exec Time:</b> %s<br/>" % exec_time)
+            tooltip_lines.append("<b>Result:</b> %s<br/>" % build.result())
+            if len(build.failure_causes()) != 0:
+                tooltip_lines.append("<b>Failure Causes:</b><br/>")
+                for cause in build.failure_causes():
+                    tooltip_lines.append("- <em>%s:</em><br/>" % cause['name'])
+                    if cause.get('description'):
+                        tooltip_lines.append('<p class="failure-cause">%s</p>' % cause['description'])
+
+            tooltip = '<div class="tooltip" id="%s">%s</div>' % \
+                        (tooltip_id, "\n".join(tooltip_lines))
+            tooltips_content.append(tooltip)
+
+        head_content = ""
+        if self.show_infobox:
+            head_content += MAPHIGHLIGHT_SCRIPT
 
         with open(output, 'w') as f_html:
             html_content = HTML_TMPL % (title,
+                                        head_content,
                                         img_src,
-                                        "\n".join(map_content))
+                                        "\n".join(map_content),
+                                        "\n".join(tooltips_content))
             f_html.write(html_content)
 
     def print(self, output):

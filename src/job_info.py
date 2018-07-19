@@ -118,6 +118,22 @@ class JobInfo:
         if tree.find('./action/queuingDurationMillis') != None:
             self.__queueing_duration = int(tree.find('./action/queuingDurationMillis').text)
 
+        self.__failure_causes = []
+        for cause_elmt in tree.iter('foundFailureCause'):
+            cause = {}
+            name = cause_elmt.find('name')
+            if name == None:
+                continue
+
+            cause['name'] = name.text
+            desc = cause_elmt.find('description')
+            if desc != None:
+                cause['description'] = desc.text.strip()
+            cause['categories'] = []
+            for cat in cause_elmt.iter('category'):
+                cause['categories'].append(cat.text)
+            self.__failure_causes.append(cause)
+
         logger.debug("%s#%s: %s %d %d %d %s" % (self.job_name, self.build_number, self.__job_type,
                                                                                   self.__start,
                                                                                   self.__queueing_duration,
@@ -153,6 +169,12 @@ class JobInfo:
             self.__fetch_info()
 
         return self.__result
+
+    def failure_causes(self):
+        if not self.__failure_causes:
+            self.__fetch_info()
+
+        return self.__failure_causes
 
     def console_log(self):
         if self.__console_log is None:
