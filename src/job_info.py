@@ -119,7 +119,7 @@ class JobInfo:
             self.__queueing_duration = int(tree.find('./action/queuingDurationMillis').text)
 
         self.__failure_causes = []
-        for cause_elmt in tree.iter('foundFailureCause'):
+        for cause_elmt in tree.iterfind('./action/foundFailureCause'):
             cause = {}
             name = cause_elmt.find('name')
             if name == None:
