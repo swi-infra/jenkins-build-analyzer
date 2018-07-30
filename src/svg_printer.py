@@ -5,6 +5,7 @@ import math
 import tempfile
 import cairosvg
 import base64
+import html
 
 from datetime import datetime, timedelta
 
@@ -54,6 +55,7 @@ HTML_TMPL = """<!DOCTYPE html>
 <html>
 <head>
     <title>%s</title>
+    <meta charset="UTF-8">
     <style type="text/css">
         .tooltip {
             display: none;
@@ -414,9 +416,9 @@ class SvgPrinter:
             if len(build.failure_causes()) != 0:
                 tooltip_lines.append("<b>Failure Causes:</b><br/>")
                 for cause in build.failure_causes():
-                    tooltip_lines.append("- <em>%s:</em><br/>" % cause['name'])
+                    tooltip_lines.append("- <em>%s:</em><br/>" % html.escape(cause['name']))
                     if cause.get('description'):
-                        tooltip_lines.append('<p class="failure-cause">%s</p>' % cause['description'])
+                        tooltip_lines.append('<p class="failure-cause">%s</p>' % html.escape(cause['description']))
 
             tooltip = '<div class="tooltip" id="%s">%s</div>' % \
                         (tooltip_id, "\n".join(tooltip_lines))
