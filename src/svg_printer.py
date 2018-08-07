@@ -22,12 +22,13 @@ STYLES = """
 
       rect.queue        { fill: rgb(148,111,97); fill-opacity: 0.3; }
 
-      rect.aborted      { fill: rgb(190,200,183); fill-opacity: 0.7; }
-      rect.success      { fill: rgb(170,255,170); fill-opacity: 0.7; }
-      rect.failure      { fill: rgb(255,170,170); fill-opacity: 0.7; }
-      rect.unstable     { fill: rgb(255,204,170); fill-opacity: 0.7; }
-      rect.other        { fill: rgb(204,204,204); fill-opacity: 0.7; }
-      rect.in_progress  { fill: rgb(135,205,222); fill-opacity: 0.7; }
+      rect.aborted       { fill: rgb(190,200,183); fill-opacity: 0.7; }
+      rect.success       { fill: rgb(170,255,170); fill-opacity: 0.7; }
+      rect.infra_failure { fill: rgb(249,170,255); fill-opacity: 0.7; }
+      rect.failure       { fill: rgb(255,170,170); fill-opacity: 0.7; }
+      rect.unstable      { fill: rgb(255,204,170); fill-opacity: 0.7; }
+      rect.other         { fill: rgb(204,204,204); fill-opacity: 0.7; }
+      rect.in_progress   { fill: rgb(135,205,222); fill-opacity: 0.7; }
 
       rect.pipe_aborted      { stroke: rgb(190,200,183); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(190,200,183); fill-opacity: 0.3; }
       rect.pipe_success      { stroke: rgb(170,255,170); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(170,255,170); fill-opacity: 0.3; }
@@ -269,6 +270,8 @@ class SvgPrinter:
             class_name = 'success'
         elif build.result() == "ABORTED":
             class_name = 'aborted'
+        elif build.result() == "INFRA_FAILURE":
+            class_name = 'infra_failure'
         elif build.result() == "FAILURE":
             class_name = 'failure'
         elif build.result() == "UNSTABLE":

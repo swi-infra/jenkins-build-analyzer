@@ -134,6 +134,9 @@ class JobInfo:
                 cause['categories'].append(cat.text)
             self.__failure_causes.append(cause)
 
+            if (self.__result == "FAILURE") and ('retrigger' in cause['categories']):
+                self.__result = "INFRA_FAILURE"
+
         logger.debug("%s#%s: %s %d %d %d %s" % (self.job_name, self.build_number, self.__job_type,
                                                                                   self.__start,
                                                                                   self.__queueing_duration,
