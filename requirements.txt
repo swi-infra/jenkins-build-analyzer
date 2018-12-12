@@ -1,3 +1,4 @@
 svgwrite
 cairosvg
 coloredlogs
+urllib3

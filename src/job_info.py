@@ -85,7 +85,7 @@ class JobInfo:
     # the build.
     def __fetch_info(self):
         url = self.build_url('api/xml?depth=3')
-        logger.info("Fetching info from %s" % url)
+        logger.info("Fetching info from '%s'" % url)
 
         content = pool_manager.urlopen('GET', url)
         if content.status != 200:
@@ -200,7 +200,7 @@ class JobInfo:
 
         pattern = None
         if self.job_type() == 'pipeline':
-            pattern = re.compile("(?:\[(?P<stage>.*)\] )?Starting building: (?P<job>.+) #(?P<bn>\d+)")
+            pattern = re.compile("(?:\[(?P<stage>.*)\] )?Starting building: (?P<job>\S+) #(?P<bn>\d+)")
         elif self.job_type() == 'buildFlow':
             pattern = re.compile("(?P<stage>) *Build (?P<job>.+) #(?P<bn>\d+) started")
 
