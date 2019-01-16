@@ -93,7 +93,11 @@ class JobInfo:
 
         raw_data = content.data.decode()
 
-        tree = ET.XML(raw_data)
+        try:
+            tree = ET.XML(raw_data)
+        except ET.ParseError:
+            logger.error("Unable to parse XML at '%s'" % url)
+            raise JobNotFoundException(self)
 
         job_type = tree.tag
         if job_type == "workflowRun":
