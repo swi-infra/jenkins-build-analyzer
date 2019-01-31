@@ -3,6 +3,7 @@ import xml.etree.ElementTree as ET
 import re
 import logging
 from urllib.parse import urljoin
+from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
@@ -188,16 +189,22 @@ class JobInfo:
 
         return self.__failure_causes
 
+    def console_log_url(self):
+        base_url = '/'.join([self.url,
+                             'job',
+                             self.job_name,
+                             self.build_number])
+
+        url = '/'.join([base_url, 'consoleText'])
+        if self.job_type() == 'pipeline':
+            url = '/'.join([base_url, 'logText/progressiveHtml'])
+
+        return url
+
     def console_log(self):
         if self.__console_log is None:
-            base_url = '/'.join([self.url,
-                                 'job',
-                                 self.job_name,
-                                 self.build_number])
+            url = self.console_log_url()
 
-            url = '/'.join([base_url, 'consoleText'])
-            if self.job_type() == 'pipeline':
-                url = '/'.join([base_url, 'logText/progressiveHtml'])
             logger.info("Fetching log from %s" % url)
 
             content = pool_manager.urlopen('GET', url)
@@ -234,38 +241,41 @@ class JobInfo:
     def __parse_pipeline_log(self):
 
         try:
-            doc = ET.fromstring('<html>{0}</html>'.format(self.console_log()))
-        except ET.ParseError:
-            logger.error("Unable to parse HTML from '%s'" % self.url)
+            doc = BeautifulSoup('<html>{0}</html>'.format(self.console_log()),
+                                features="html.parser")
+        except ET.ParseError as e:
+            logger.error("Unable to parse HTML from '%s'" % self.console_log_url())
+            logger.error(e)
             return
 
         pattern = re.compile("/job/(?P<job>.+)/(?P<bn>\d+)/")
 
         enclosing_ids = {}
         node_enclosing_ids = {}
-        for span in doc.iter('span'):
-            if 'class' not in span.attrib:
+        for span in doc.find_all('span'):
+            if 'class' not in span.attrs:
                 continue
 
-            if span.attrib['class'] == 'pipeline-new-node' and \
-               'enclosingId' in span.attrib and \
-               'startId' in span.attrib and \
-               'label' in span.attrib:
-                start_id = span.attrib['startId']
-                if span.attrib['label'].startswith('Branch: '):
-                    enclosing_ids[start_id] = span.attrib['label'].replace('Branch: ', '')
+            if span.attrs['class'][0] == 'pipeline-new-node' and \
+               'enclosingid' in span.attrs and \
+               'startid' in span.attrs and \
+               'label' in span.attrs:
+                start_id = span.attrs['startid']
+                if span.attrs['label'].startswith('Branch: '):
+                    enclosing_ids[start_id] = span.attrs['label'].replace('Branch: ', '')
 
-            elif span.attrib['class'] == 'pipeline-new-node' and \
-                 'enclosingId' in span.attrib and \
-                 'nodeId' in span.attrib:
-                enclosing_id = span.attrib['enclosingId']
-                node_id = span.attrib['nodeId']
+            elif span.attrs['class'][0] == 'pipeline-new-node' and \
+                 'enclosingid' in span.attrs and \
+                 'nodeid' in span.attrs:
+                enclosing_id = span.attrs['enclosingid']
+                node_id = span.attrs['nodeid']
                 node_enclosing_ids[node_id] = enclosing_id
 
-            elif span.attrib['class'].startswith('pipeline-node-'):
-                node_id = span.attrib['class'].replace('pipeline-node-', '')
+            elif span.attrs['class'][0].startswith('pipeline-node-'):
+                node_id = span.attrs['class'][0].replace('pipeline-node-', '')
                 if node_id not in node_enclosing_ids:
                     logger.warn("Node %s not found" % node_id)
+                    logger.warn(node_enclosing_ids)
                     continue
 
                 enclosing_id = node_enclosing_ids[node_id]
@@ -276,11 +286,12 @@ class JobInfo:
                 if 'Starting building:' not in span.text:
                     continue
 
-                job_link = span.find('./a')
+                job_link = span.a
                 if job_link is None:
+                    logger.warn("No link found for %s" % span.text)
                     continue
 
-                job_href = job_link.attrib['href']
+                job_href = job_link.attrs['href']
                 logger.debug(job_href)
 
                 m = pattern.match(job_href)

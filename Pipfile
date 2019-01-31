@@ -10,8 +10,8 @@ name = "pypi"
 
 
 [packages]
-
 svgwrite = "*"
 CairoSVG = "*"
 coloredlogs = "*"
 urllib3 = "*"
+beautifulsoup4 = "*"
