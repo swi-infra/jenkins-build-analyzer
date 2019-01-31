@@ -263,11 +263,17 @@ class JobInfo:
                 start_id = span.attrs['startid']
                 if span.attrs['label'].startswith('Branch: '):
                     enclosing_ids[start_id] = span.attrs['label'].replace('Branch: ', '')
+                    logger.debug("Branch#%s : %s" % (start_id, enclosing_ids[start_id]))
 
             elif span.attrs['class'][0] == 'pipeline-new-node' and \
-                 'enclosingid' in span.attrs and \
-                 'nodeid' in span.attrs:
-                enclosing_id = span.attrs['enclosingid']
+                 'nodeid' in span.attrs and \
+                 ( 'enclosingid' in span.attrs or \
+                   'startid' in span.attrs ):
+                if 'enclosingid' in span.attrs:
+                    enclosing_id = span.attrs['enclosingid']
+                elif 'startid' in span.attrs:
+                    enclosing_id = span.attrs['startid']
+
                 node_id = span.attrs['nodeid']
                 node_enclosing_ids[node_id] = enclosing_id
 
@@ -278,29 +284,34 @@ class JobInfo:
                     logger.warn(node_enclosing_ids)
                     continue
 
-                enclosing_id = node_enclosing_ids[node_id]
                 branch = None
+                enclosing_id = node_enclosing_ids[node_id]
                 if enclosing_id in enclosing_ids:
                     branch = enclosing_ids[enclosing_id]
 
                 if 'Starting building:' not in span.text:
                     continue
 
-                job_link = span.a
-                if job_link is None:
+                logger.debug(span)
+
+                m = None
+                for job_link in span.find_all('a'):
+
+                    job_href = job_link.attrs['href']
+                    logger.debug(job_href)
+
+                    m = pattern.match(job_href)
+                    if m:
+                        break
+
+                if m is None:
                     logger.warn("No link found for %s" % span.text)
-                    continue
-
-                job_href = job_link.attrs['href']
-                logger.debug(job_href)
-
-                m = pattern.match(job_href)
-                if not m:
                     continue
 
                 job = m.group('job')
                 build_number = m.group('bn')
                 if job and build_number:
+                    branch_info = ""
                     if branch:
                         branch_info = "[%s]" % branch
                     logger.debug("Sub-build: %s#%s %s" % (job, build_number, branch_info))
@@ -312,6 +323,9 @@ class JobInfo:
                     except JobNotFoundException as e:
                         logger.error(e)
                         logger.warn(branch)
+
+            else:
+                logger.debug(span)
 
     # Retreive the 'sub-builds', which are launched from this job.
     def __fetch_sub_builds(self):
