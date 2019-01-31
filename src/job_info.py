@@ -8,17 +8,20 @@ logger = logging.getLogger(__name__)
 
 pool_manager = urllib3.PoolManager(timeout=30.0)
 
+
 class JobInfoFetcher:
 
     def fetch(url, job_name, build_number):
         job_info = JobInfo(url, job_name, build_number)
         return job_info
 
+
 class JobNotFoundException(Exception):
 
     def __init__(self, job_info):
 
         super(JobNotFoundException, self).__init__("Job %s#%s not found" % (job_info.job_name, job_info.build_number))
+
 
 class BuildSection:
 
@@ -46,9 +49,10 @@ class BuildSection:
 
     def parents_cnt(self):
         cnt = 0
-        if self.parent != None:
+        if self.parent is not None:
             cnt = 1 + self.parent.parents_cnt()
         return cnt
+
 
 class JobInfo:
 
@@ -111,27 +115,28 @@ class JobInfo:
 
         self.__start = int(tree.find('./timestamp').text)
         self.__duration = int(tree.find('./duration').text)
-        if tree.find('./result') != None:
+        if tree.find('./result') is not None:
             self.__result = tree.find('./result').text
-        elif tree.find('./building') != None and tree.find('./building').text == 'true':
+        elif tree.find('./building') is not None and \
+             tree.find('./building').text == 'true':
             self.__result = 'IN_PROGRESS'
         else:
             self.__result = 'UNKNOWN'
 
         self.__queueing_duration = 0
-        if tree.find('./action/queuingDurationMillis') != None:
+        if tree.find('./action/queuingDurationMillis') is not None:
             self.__queueing_duration = int(tree.find('./action/queuingDurationMillis').text)
 
         self.__failure_causes = []
         for cause_elmt in tree.iterfind('./action/foundFailureCause'):
             cause = {}
             name = cause_elmt.find('name')
-            if name == None:
+            if name is None:
                 continue
 
             cause['name'] = name.text
             desc = cause_elmt.find('description')
-            if desc != None:
+            if desc is not None:
                 cause['description'] = desc.text.strip()
             cause['categories'] = []
             for cat in cause_elmt.iter('category'):
@@ -186,9 +191,9 @@ class JobInfo:
     def console_log(self):
         if self.__console_log is None:
             base_url = '/'.join([self.url,
-                                'job',
-                                self.job_name,
-                                self.build_number])
+                                 'job',
+                                 self.job_name,
+                                 self.build_number])
 
             url = '/'.join([base_url, 'consoleText'])
             if self.job_type() == 'pipeline':
@@ -227,15 +232,18 @@ class JobInfo:
                 logger.error(e)
 
     def __parse_pipeline_log(self):
-        doc = ET.fromstring('<html>{0}</html>'.format(self.console_log()))
+
+        try:
+            doc = ET.fromstring('<html>{0}</html>'.format(self.console_log()))
+        except ET.ParseError:
+            logger.error("Unable to parse HTML from '%s'" % self.url)
+            return
 
         pattern = re.compile("/job/(?P<job>.+)/(?P<bn>\d+)/")
 
         enclosing_ids = {}
         node_enclosing_ids = {}
         for span in doc.iter('span'):
-            #logger.debug(span.attrib)
-
             if 'class' not in span.attrib:
                 continue
 
@@ -248,8 +256,8 @@ class JobInfo:
                     enclosing_ids[start_id] = span.attrib['label'].replace('Branch: ', '')
 
             elif span.attrib['class'] == 'pipeline-new-node' and \
-               'enclosingId' in span.attrib and \
-               'nodeId' in span.attrib:
+                 'enclosingId' in span.attrib and \
+                 'nodeId' in span.attrib:
                 enclosing_id = span.attrib['enclosingId']
                 node_id = span.attrib['nodeId']
                 node_enclosing_ids[node_id] = enclosing_id
@@ -269,7 +277,7 @@ class JobInfo:
                     continue
 
                 job_link = span.find('./a')
-                if job_link == None:
+                if job_link is None:
                     continue
 
                 job_href = job_link.attrib['href']
@@ -292,7 +300,7 @@ class JobInfo:
 
                     except JobNotFoundException as e:
                         logger.error(e)
-                        logger.warn(current_branch)
+                        logger.warn(branch)
 
     # Retreive the 'sub-builds', which are launched from this job.
     def __fetch_sub_builds(self):
@@ -357,13 +365,13 @@ class JobInfo:
                                                 section.duration()))
 
     def sub_builds(self):
-        if self.__sub_builds == None:
+        if self.__sub_builds is None:
             self.__fetch_sub_builds()
 
         return self.__sub_builds
 
     def all_builds(self):
-        if self.__all_builds == None:
+        if self.__all_builds is None:
             blds = [self]
 
             for bld in self.sub_builds():
@@ -375,4 +383,3 @@ class JobInfo:
 
     def sections(self):
         return self.__sections
-
