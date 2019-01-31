@@ -181,7 +181,14 @@ class JobInfo:
 
     def console_log(self):
         if self.__console_log is None:
-            url = '/'.join([self.url, 'job', self.job_name, self.build_number, 'consoleText'])
+            base_url = '/'.join([self.url,
+                                'job',
+                                self.job_name,
+                                self.build_number])
+
+            url = '/'.join([base_url, 'consoleText'])
+            if self.job_type() == 'pipeline':
+                url = '/'.join([base_url, 'logText/progressiveHtml'])
             logger.info("Fetching log from %s" % url)
 
             content = pool_manager.urlopen('GET', url)
@@ -189,20 +196,8 @@ class JobInfo:
 
         return self.__console_log
 
-
-    # Retreive the 'sub-builds', which are launched from this job.
-    def __fetch_sub_builds(self):
-        self.__sub_builds = []
-
-        if self.job_type() != 'pipeline' and \
-           self.job_type() != 'buildFlow':
-            return
-
-        pattern = None
-        if self.job_type() == 'pipeline':
-            pattern = re.compile("(?:\[(?P<stage>.*)\] )?Starting building: (?P<job>\S+) #(?P<bn>\d+)")
-        elif self.job_type() == 'buildFlow':
-            pattern = re.compile("(?P<stage>) *Build (?P<job>.+) #(?P<bn>\d+) started")
+    def __parse_build_flow_log(self):
+        pattern = re.compile("(?P<stage>) *Build (?P<job>.+) #(?P<bn>\d+) started")
 
         for line in self.console_log().splitlines():
 
@@ -226,6 +221,90 @@ class JobInfo:
 
             except JobNotFoundException as e:
                 logger.error(e)
+
+    def __parse_pipeline_log(self):
+        doc = ET.fromstring('<html>{0}</html>'.format(self.console_log()))
+
+        pattern = re.compile("/job/(?P<job>.+)/(?P<bn>\d+)/")
+
+        enclosing_ids = {}
+        node_enclosing_ids = {}
+        for span in doc.iter('span'):
+            #logger.debug(span.attrib)
+
+            if 'class' not in span.attrib:
+                continue
+
+            if span.attrib['class'] == 'pipeline-new-node' and \
+               'enclosingId' in span.attrib and \
+               'startId' in span.attrib and \
+               'label' in span.attrib:
+                start_id = span.attrib['startId']
+                if span.attrib['label'].startswith('Branch: '):
+                    enclosing_ids[start_id] = span.attrib['label'].replace('Branch: ', '')
+
+            elif span.attrib['class'] == 'pipeline-new-node' and \
+               'enclosingId' in span.attrib and \
+               'nodeId' in span.attrib:
+                enclosing_id = span.attrib['enclosingId']
+                node_id = span.attrib['nodeId']
+                node_enclosing_ids[node_id] = enclosing_id
+
+            elif span.attrib['class'].startswith('pipeline-node-'):
+                node_id = span.attrib['class'].replace('pipeline-node-', '')
+                if node_id not in node_enclosing_ids:
+                    logger.warn("Node %s not found" % node_id)
+                    continue
+
+                enclosing_id = node_enclosing_ids[node_id]
+                branch = None
+                if enclosing_id in enclosing_ids:
+                    branch = enclosing_ids[enclosing_id]
+
+                if 'Starting building:' not in span.text:
+                    continue
+
+                job_link = span.find('./a')
+                if job_link == None:
+                    continue
+
+                job_href = job_link.attrib['href']
+                logger.debug(job_href)
+
+                m = pattern.match(job_href)
+                if not m:
+                    continue
+
+                job = m.group('job')
+                build_number = m.group('bn')
+                if job and build_number:
+                    if branch:
+                        branch_info = "[%s]" % branch
+                    logger.debug("Sub-build: %s#%s %s" % (job, build_number, branch_info))
+
+                    try:
+                        job = JobInfo(self.url, job, build_number, branch)
+                        self.__sub_builds.append(job)
+
+                    except JobNotFoundException as e:
+                        logger.error(e)
+                        logger.warn(current_branch)
+
+    # Retreive the 'sub-builds', which are launched from this job.
+    def __fetch_sub_builds(self):
+        self.__sub_builds = []
+
+        if self.job_type() != 'pipeline' and \
+           self.job_type() != 'buildFlow':
+            return
+
+        # Parse log as HTML
+        if self.job_type() == 'pipeline':
+            self.__parse_pipeline_log()
+
+        # Parse log
+        elif self.job_type() == 'buildFlow':
+            self.__parse_build_flow_log()
 
         logger.info("%s#%s: %d sub-build(s)" % (self.job_name, self.build_number, len(self.__sub_builds)))
 
