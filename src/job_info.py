@@ -12,8 +12,8 @@ pool_manager = urllib3.PoolManager(timeout=30.0)
 
 class JobInfoFetcher:
 
-    def fetch(url, job_name, build_number):
-        job_info = JobInfo(url, job_name, build_number)
+    def fetch(url, job_name, build_number, cache=None):
+        job_info = JobInfo(url, job_name, build_number, cache=cache)
         return job_info
 
 
@@ -57,7 +57,7 @@ class BuildSection:
 
 class JobInfo:
 
-    def __init__(self, url, job_name, build_number, stage=None, fetch_on_init=True):
+    def __init__(self, url, job_name, build_number, stage=None, fetch_on_init=True, cache=None):
         self.url = url
         self.job_name = job_name
         self.build_number = build_number
@@ -75,6 +75,8 @@ class JobInfo:
 
         self.__console_log = None
 
+        self.__cache = cache
+
         if fetch_on_init:
             self.fetch()
 
@@ -90,13 +92,24 @@ class JobInfo:
     # the build.
     def __fetch_info(self):
         url = self.build_url('api/xml?depth=3')
-        logger.info("Fetching info from '%s'" % url)
+        cache_name = "jenkins-build-analyzer-%s" % url
+        raw_data = None
+        content_cached = False
+        if self.__cache:
+            raw_data = self.__cache.get(cache_name)
 
-        content = pool_manager.urlopen('GET', url)
-        if content.status != 200:
-            raise JobNotFoundException(self)
+        if raw_data:
+            logger.info("Content for '%s' already cached" % url)
+            content_cached = True
+        else:
+            logger.info("Fetching info from '%s'" % url)
 
-        raw_data = content.data.decode()
+            content = pool_manager.urlopen('GET', url)
+            if content.status != 200:
+                raise JobNotFoundException(self)
+
+            raw_data = content.data.decode()
+
 
         try:
             tree = ET.XML(raw_data)
@@ -147,11 +160,17 @@ class JobInfo:
             if (self.__result == "FAILURE") and ('retrigger' in cause['categories']):
                 self.__result = "INFRA_FAILURE"
 
-        logger.debug("%s#%s: %s %d %d %d %s" % (self.job_name, self.build_number, self.__job_type,
-                                                                                  self.__start,
-                                                                                  self.__queueing_duration,
-                                                                                  self.__duration,
-                                                                                  self.__result))
+        logger.debug("%s#%s: %s %d %d %d %s" % (self.job_name,
+                                                self.build_number,
+                                                self.__job_type,
+                                                self.__start,
+                                                self.__queueing_duration,
+                                                self.__duration,
+                                                self.__result))
+
+        if self.__cache and not content_cached and self.__result != 'IN_PROGRESS':
+            # Cache the content for 5h
+            self.__cache.set(cache_name, raw_data, (5 * 60 * 60))
 
     def job_type(self):
         if not self.__job_type:
@@ -205,10 +224,21 @@ class JobInfo:
         if self.__console_log is None:
             url = self.console_log_url()
 
-            logger.info("Fetching log from %s" % url)
+            cache_name = "jenkins-build-analyzer-%s" % url
+            if self.__cache:
+                self.__console_log = self.__cache.get(cache_name)
 
-            content = pool_manager.urlopen('GET', url)
-            self.__console_log = content.data.decode('latin-1')
+            if self.__console_log:
+                logger.info("Content for '%s' already cached" % url)
+            else:
+                logger.info("Fetching log from %s" % url)
+
+                content = pool_manager.urlopen('GET', url)
+                self.__console_log = content.data.decode('latin-1')
+
+                if self.__cache and self.__result != 'IN_PROGRESS':
+                    # Cache the content for 5h
+                    self.__cache.set(cache_name, self.__console_log, (5 * 60 * 60))
 
         return self.__console_log
 
@@ -232,7 +262,7 @@ class JobInfo:
             logger.debug("Sub-build: %s#%s %s" % (job, build_number, stage_info))
 
             try:
-                job = JobInfo(self.url, job, build_number, stage)
+                job = JobInfo(self.url, job, build_number, stage, cache=self.__cache)
                 self.__sub_builds.append(job)
 
             except JobNotFoundException as e:
@@ -256,19 +286,21 @@ class JobInfo:
             if 'class' not in span.attrs:
                 continue
 
-            if span.attrs['class'][0] == 'pipeline-new-node' and \
-               'enclosingid' in span.attrs and \
-               'startid' in span.attrs and \
-               'label' in span.attrs:
+            if (span.attrs['class'][0] == 'pipeline-new-node' and
+                'enclosingid' in span.attrs and
+                'startid' in span.attrs and
+                'label' in span.attrs):
+
                 start_id = span.attrs['startid']
                 if span.attrs['label'].startswith('Branch: '):
                     enclosing_ids[start_id] = span.attrs['label'].replace('Branch: ', '')
                     logger.debug("Branch#%s : %s" % (start_id, enclosing_ids[start_id]))
 
-            elif span.attrs['class'][0] == 'pipeline-new-node' and \
-                 'nodeid' in span.attrs and \
-                 ( 'enclosingid' in span.attrs or \
-                   'startid' in span.attrs ):
+            elif (span.attrs['class'][0] == 'pipeline-new-node' and
+                  'nodeid' in span.attrs and
+                  ('enclosingid' in span.attrs or
+                   'startid' in span.attrs)):
+
                 if 'enclosingid' in span.attrs:
                     enclosing_id = span.attrs['enclosingid']
                 elif 'startid' in span.attrs:
@@ -291,8 +323,6 @@ class JobInfo:
 
                 if 'Starting building:' not in span.text:
                     continue
-
-                logger.debug(span)
 
                 m = None
                 for job_link in span.find_all('a'):
@@ -317,7 +347,7 @@ class JobInfo:
                     logger.debug("Sub-build: %s#%s %s" % (job, build_number, branch_info))
 
                     try:
-                        job = JobInfo(self.url, job, build_number, branch)
+                        job = JobInfo(self.url, job, build_number, branch, cache=self.__cache)
                         self.__sub_builds.append(job)
 
                     except JobNotFoundException as e:
