@@ -1,6 +1,7 @@
 
 import svgwrite
-import coloredlogs, logging
+import coloredlogs
+import logging
 import math
 import tempfile
 import cairosvg
@@ -300,13 +301,14 @@ class SvgPrinter:
 
         section_max_duration = duration
         section_last_end = build.start()
-        for section in build.sections():
-            if section_last_end and not section.parent:
-                section_max_duration -= (section.start - section_last_end) / 1000 / 60
-            self.__render_section(section, index, section_max_duration)
-            if section.end and not section.parent:
-                section_max_duration -= (section.duration() / 1000 / 60)
-                section_last_end = section.end
+        if build.sections():
+            for section in build.sections():
+                    if section_last_end and not section.parent:
+                        section_max_duration -= (section.start - section_last_end) / 1000 / 60
+                    self.__render_section(section, index, section_max_duration)
+                    if section.end and not section.parent:
+                        section_max_duration -= (section.duration() / 1000 / 60)
+                        section_last_end = section.end
 
         build_info = ""
         if build.stage:
@@ -315,7 +317,6 @@ class SvgPrinter:
         dwg.add(dwg.text(build_info,
                          insert=(x + 5, y + self.build_height - self.build_padding - 8),
                          class_="min"))
-
 
         if self.show_time:
             queue_time = self.__get_time(build.queueing_duration())

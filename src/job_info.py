@@ -12,8 +12,12 @@ pool_manager = urllib3.PoolManager(timeout=30.0)
 
 class JobInfoFetcher:
 
-    def fetch(url, job_name, build_number, cache=None):
-        job_info = JobInfo(url, job_name, build_number, cache=cache)
+    def fetch(url, job_name, build_number, cache=None, fetch_sections=True):
+        job_info = JobInfo(url,
+                           job_name,
+                           build_number,
+                           cache=cache,
+                           fetch_sections=fetch_sections)
         return job_info
 
 
@@ -57,7 +61,7 @@ class BuildSection:
 
 class JobInfo:
 
-    def __init__(self, url, job_name, build_number, stage=None, fetch_on_init=True, cache=None):
+    def __init__(self, url, job_name, build_number, stage=None, fetch_on_init=True, cache=None, fetch_sections=True):
         self.url = url
         self.job_name = job_name
         self.build_number = build_number
@@ -71,6 +75,8 @@ class JobInfo:
 
         self.__sub_builds = None
         self.__all_builds = None
+
+        self.__fetch_sections = fetch_sections
         self.__sections = None
 
         self.__console_log = None
@@ -82,8 +88,12 @@ class JobInfo:
 
     def fetch(self):
         self.__fetch_info()
+        if self.__fetch_sections == 'done':
+            # Only fetch sections if the top build is done
+            self.__fetch_sections = self.is_done()
         self.__fetch_sub_builds()
-        self.__determine_sections()
+        if self.__fetch_sections is True:
+            self.__determine_sections()
 
     def build_url(self, extra=""):
         return urljoin(self.url, '/'.join(['job', self.job_name, str(self.build_number), extra]))
@@ -109,7 +119,6 @@ class JobInfo:
                 raise JobNotFoundException(self)
 
             raw_data = content.data.decode()
-
 
         try:
             tree = ET.XML(raw_data)
@@ -196,6 +205,10 @@ class JobInfo:
 
         return self.__duration
 
+    def is_done(self):
+        return (self.result() != 'IN_PROGRESS') and \
+               (self.result() != 'UNKNOWN')
+
     def result(self):
         if not self.__result:
             self.__fetch_info()
@@ -262,7 +275,12 @@ class JobInfo:
             logger.debug("Sub-build: %s#%s %s" % (job, build_number, stage_info))
 
             try:
-                job = JobInfo(self.url, job, build_number, stage, cache=self.__cache)
+                job = JobInfo(self.url,
+                              job,
+                              build_number,
+                              stage,
+                              cache=self.__cache,
+                              fetch_sections=self.__fetch_sections)
                 self.__sub_builds.append(job)
 
             except JobNotFoundException as e:
@@ -347,7 +365,12 @@ class JobInfo:
                     logger.debug("Sub-build: %s#%s %s" % (job, build_number, branch_info))
 
                     try:
-                        job = JobInfo(self.url, job, build_number, branch, cache=self.__cache)
+                        job = JobInfo(self.url,
+                                      job,
+                                      build_number,
+                                      branch,
+                                      cache=self.__cache,
+                                      fetch_sections=self.__fetch_sections)
                         self.__sub_builds.append(job)
 
                     except JobNotFoundException as e:
