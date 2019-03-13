@@ -138,11 +138,11 @@ class JobInfo:
 
         self.__start = int(tree.find('./timestamp').text)
         self.__duration = int(tree.find('./duration').text)
-        if tree.find('./result') is not None:
-            self.__result = tree.find('./result').text
-        elif tree.find('./building') is not None and \
+        if tree.find('./building') is not None and \
              tree.find('./building').text == 'true':
             self.__result = 'IN_PROGRESS'
+        elif tree.find('./result') is not None:
+            self.__result = tree.find('./result').text
         else:
             self.__result = 'UNKNOWN'
 
