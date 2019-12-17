@@ -10,23 +10,11 @@ logger = logging.getLogger(__name__)
 pool_manager = urllib3.PoolManager(timeout=30.0)
 
 
-class JobInfoFetcher:
+class BuildNotFoundException(Exception):
 
-    def fetch(url, job_name, build_number, cache=None, fetch_sections=True):
-        job_info = JobInfo(url,
-                           job_name,
-                           build_number,
-                           cache=cache,
-                           fetch_sections=fetch_sections)
-        return job_info
+    def __init__(self, build_info):
 
-
-class JobNotFoundException(Exception):
-
-    def __init__(self, job_info):
-
-        super(JobNotFoundException, self).__init__("Job %s#%s not found" % (job_info.job_name, job_info.build_number))
-
+        super(BuildNotFoundException, self).__init__("Job %s#%s not found" % (build_info.job_name, build_info.build_number()))
 
 class BuildSection:
 
@@ -34,6 +22,7 @@ class BuildSection:
         self.name = name
         self.__type = section_type
         self.parent = None
+        self.children = []
         self.start = None
         self.end = None
 
@@ -78,12 +67,19 @@ class PipelineNode:
         return None
 
 
-class JobInfo:
+class BuildInfo:
 
-    def __init__(self, url, job_name, build_number, stage=None, fetch_on_init=True, cache=None, fetch_sections=True):
-        self.url = url
+    def __init__(self, fetcher, job_name, build_number, stage=None, fetch_on_init=True, cache=None, fetch_sections=True):
+        self.fetcher = fetcher
         self.job_name = job_name
-        self.build_number = build_number
+
+        self._build_number = None
+        self.build_number_str = build_number
+        try:
+            self._build_number = int(build_number)
+        except ValueError:
+            pass
+
         self.stage = stage
 
         self.__job_type = None
@@ -91,59 +87,79 @@ class JobInfo:
         self.__start = None
         self.__duration = None
         self.__result = None
+        self.__node_name = None
 
         self.__sub_builds = None
         self.__all_builds = None
 
-        self.__fetch_sections = fetch_sections
+        self._fetch_sections = fetch_sections
         self.__sections = None
 
-        self.__console_log = None
+        self.build_xml = None
+        self._raw_data = None
 
-        self.__cache = cache
+        self._console_log = None
+
+        self.cache = cache
 
         if fetch_on_init:
             self.fetch()
 
     def fetch(self):
         self.__fetch_info()
-        if self.__fetch_sections == 'done':
+        if self._fetch_sections == 'done':
             # Only fetch sections if the top build is done
-            self.__fetch_sections = self.is_done()
+            self._fetch_sections = self.is_done()
         self.__fetch_sub_builds()
-        if self.__fetch_sections is True:
+        if self._fetch_sections is True:
             self.__determine_sections()
 
     def build_url(self, extra=""):
-        return urljoin(self.url, '/'.join(['job', self.job_name, str(self.build_number), extra]))
+        return urljoin(self.fetcher.url, '/'.join(['job', self.job_name, self.build_number_str, extra]))
+
+    def __fetch_build_data(self, extra="", encoding="ISO-8859-1"):
+        raw_data = None
+        cache_key = None
+        api_url = self.build_url(extra)
+        if self.cache and self._build_number:
+            cache_key = "jenkins-build-analyzer-%s" % api_url
+            raw_data = self.cache.get(cache_key)
+
+        if raw_data:
+            logger.info("Content for '%s' already cached" % api_url)
+            return (raw_data, True, cache_key)
+
+        logger.info("Fetching info from '%s'" % api_url)
+
+        content = pool_manager.urlopen('GET', api_url)
+        if content.status != 200:
+            raise BuildNotFoundException(self)
+
+        raw_data = content.data.decode(encoding)
+
+        return (raw_data, False, cache_key)
+
+    def get_build_xml(self):
+        if self.build_xml:
+            return self.build_xml
+
+        self._raw_data, content_cached, cache_key = self.__fetch_build_data("api/xml?depth=3")
+        try:
+            self.build_xml = ET.XML(self._raw_data)
+        except ET.ParseError:
+            logger.error("Unable to parse XML at '%s'" % url)
+            raise BuildNotFoundException(self)
+
+        if self.cache and cache_key and not content_cached and self.is_done():
+            # Cache the content for 5h
+            self.cache.set(cache_key, self._raw_data, (5 * 60 * 60))
+
+        return self.build_xml
 
     # Retrieve the XML from Jenkins that contains some info about
     # the build.
     def __fetch_info(self):
-        url = self.build_url('api/xml?depth=3')
-        cache_name = "jenkins-build-analyzer-%s" % url
-        raw_data = None
-        content_cached = False
-        if self.__cache:
-            raw_data = self.__cache.get(cache_name)
-
-        if raw_data:
-            logger.info("Content for '%s' already cached" % url)
-            content_cached = True
-        else:
-            logger.info("Fetching info from '%s'" % url)
-
-            content = pool_manager.urlopen('GET', url)
-            if content.status != 200:
-                raise JobNotFoundException(self)
-
-            raw_data = content.data.decode()
-
-        try:
-            tree = ET.XML(raw_data)
-        except ET.ParseError:
-            logger.error("Unable to parse XML at '%s'" % url)
-            raise JobNotFoundException(self)
+        tree = self.get_build_xml()
 
         job_type = tree.tag
         if job_type == "workflowRun":
@@ -157,13 +173,6 @@ class JobInfo:
 
         self.__start = int(tree.find('./timestamp').text)
         self.__duration = int(tree.find('./duration').text)
-        if tree.find('./building') is not None and \
-             tree.find('./building').text == 'true':
-            self.__result = 'IN_PROGRESS'
-        elif tree.find('./result') is not None:
-            self.__result = tree.find('./result').text
-        else:
-            self.__result = 'UNKNOWN'
 
         self.__queueing_duration = 0
         if tree.find('./action/queuingDurationMillis') is not None:
@@ -189,16 +198,12 @@ class JobInfo:
                 self.__result = "INFRA_FAILURE"
 
         logger.debug("%s#%s: %s %d %d %d %s" % (self.job_name,
-                                                self.build_number,
+                                                self.build_number(),
                                                 self.__job_type,
                                                 self.__start,
                                                 self.__queueing_duration,
                                                 self.__duration,
                                                 self.__result))
-
-        if self.__cache and not content_cached and self.__result != 'IN_PROGRESS':
-            # Cache the content for 5h
-            self.__cache.set(cache_name, raw_data, (5 * 60 * 60))
 
     def job_type(self):
         if not self.__job_type:
@@ -224,13 +229,51 @@ class JobInfo:
 
         return self.__duration
 
+    def node_name(self):
+        if self.__node_name:
+            return self.__node_name
+
+        if not self.build_xml:
+            self.__fetch_info()
+
+        built_on = self.build_xml.find('./builtOn')
+        if built_on != None:
+            self.__node_name = built_on.text
+
+        return self.__node_name
+
+    def build_number(self):
+        if self._build_number != None:
+            return self._build_number
+
+        if not self.build_xml:
+            self.__fetch_info()
+
+        self._build_number = int(self.build_xml.find('./number').text)
+        return self._build_number
+
     def is_done(self):
         return (self.result() != 'IN_PROGRESS') and \
                (self.result() != 'UNKNOWN')
 
     def result(self):
-        if not self.__result:
+        if self.__result:
+            return self.__result
+
+        if not self.build_xml:
             self.__fetch_info()
+
+        # Determine result
+        result = None
+        if self.build_xml.find('./building') is not None and \
+           self.build_xml.find('./building').text == 'true':
+            result = 'IN_PROGRESS'
+        elif self.build_xml.find('./result') is not None:
+            result = self.build_xml.find('./result').text
+        else:
+            result = 'UNKNOWN'
+
+        self.__result = result
 
         return self.__result
 
@@ -240,39 +283,30 @@ class JobInfo:
 
         return self.__failure_causes
 
-    def console_log_url(self):
-        base_url = '/'.join([self.url,
-                             'job',
-                             self.job_name,
-                             self.build_number])
-
-        url = '/'.join([base_url, 'consoleText'])
-        if self.job_type() == 'pipeline':
-            url = '/'.join([base_url, 'logText/progressiveHtml'])
-
-        return url
-
     def console_log(self):
-        if self.__console_log is None:
-            url = self.console_log_url()
+        if self._console_log:
+            return self._console_log
 
-            cache_name = "jenkins-build-analyzer-%s" % url
-            if self.__cache:
-                self.__console_log = self.__cache.get(cache_name)
+        url_extra = 'consoleText'
+        if self.job_type() == 'pipeline':
+            url_extra = 'logText/progressiveHtml'
 
-            if self.__console_log:
-                logger.info("Content for '%s' already cached" % url)
-            else:
-                logger.info("Fetching log from %s" % url)
+        raw_data, content_cached, cache_key = self.__fetch_build_data(url_extra)
 
-                content = pool_manager.urlopen('GET', url)
-                self.__console_log = content.data.decode('latin-1')
+        self._console_log = raw_data
 
-                if self.__cache and self.__result != 'IN_PROGRESS':
-                    # Cache the content for 5h
-                    self.__cache.set(cache_name, self.__console_log, (5 * 60 * 60))
+        if self.cache and cache_key and not content_cached and self.__result != 'IN_PROGRESS':
+            # Cache the content for 5h
+            self.cache.set(cache_key, self._console_log, (5 * 60 * 60))
 
-        return self.__console_log
+        return self._console_log
+
+    def create_sub_build(self, job_name, build_number, stage):
+        return BuildInfo(self.fetcher,
+                         job_name,
+                         build_number,
+                         stage=stage,
+                         fetch_sections=self._fetch_sections)
 
     def __parse_build_flow_log(self):
         pattern = re.compile("(?P<stage>) *Build (?P<job>.+) #(?P<bn>\d+) started")
@@ -285,24 +319,21 @@ class JobInfo:
 
             logger.debug("Line: %s" % line)
 
-            job = m.group('job')
+            job_name = m.group('job')
             build_number = m.group('bn')
             stage = m.group('stage')
             stage_info = ""
             if stage:
                 stage_info = "[%s]" % stage
-            logger.debug("Sub-build: %s#%s %s" % (job, build_number, stage_info))
+            logger.debug("Sub-build: %s#%s %s" % (job_name, build_number, stage_info))
 
             try:
-                job = JobInfo(self.url,
-                              job,
-                              build_number,
-                              stage,
-                              cache=self.__cache,
-                              fetch_sections=self.__fetch_sections)
-                self.__sub_builds.append(job)
+                sub_build = self.create_sub_build(job_name,
+                                                  build_number,
+                                                  stage)
+                self.__sub_builds.append(sub_build)
 
-            except JobNotFoundException as e:
+            except BuildNotFoundException as e:
                 logger.error(e)
 
     def __parse_pipeline_log(self):
@@ -360,8 +391,6 @@ class JobInfo:
                 branch = None
                 if node.parent:
                     branch = node.get_branch()
-                else:
-                    logger.debug("No branch for id %s" % enclosing_id)
 
                 if 'Starting building:' not in span.text:
                     continue
@@ -380,31 +409,28 @@ class JobInfo:
                     logger.warn("No link found for %s" % span.text)
                     continue
 
-                job = m.group('job')
+                job_name = m.group('job')
                 build_number = m.group('bn')
-                if job and build_number:
+                if job_name and build_number:
                     branch_info = ""
                     if branch:
                         branch_info = "[%s]" % branch
-                    logger.debug("Sub-build: %s#%s %s" % (job, build_number, branch_info))
+                    logger.debug("Sub-build: %s#%s %s" % (job_name, build_number, branch_info))
 
                     try:
-                        job = JobInfo(self.url,
-                                      job,
-                                      build_number,
-                                      branch,
-                                      cache=self.__cache,
-                                      fetch_sections=self.__fetch_sections)
-                        self.__sub_builds.append(job)
+                        sub_build = self.create_sub_build(job_name,
+                                                          build_number,
+                                                          branch)
+                        self.__sub_builds.append(sub_build)
 
-                    except JobNotFoundException as e:
+                    except BuildNotFoundException as e:
                         logger.error(e)
                         logger.warn(branch)
 
             else:
                 logger.debug(span)
 
-    # Retreive the 'sub-builds', which are launched from this job.
+    # Retrieve the 'sub-builds', which are launched from this job.
     def __fetch_sub_builds(self):
         self.__sub_builds = []
 
@@ -420,7 +446,7 @@ class JobInfo:
         elif self.job_type() == 'buildFlow':
             self.__parse_build_flow_log()
 
-        logger.info("%s#%s: %d sub-build(s)" % (self.job_name, self.build_number, len(self.__sub_builds)))
+        logger.info("%s#%s: %d sub-build(s)" % (self.job_name, self.build_number(), len(self.__sub_builds)))
 
     def __determine_sections(self):
         self.__sections = []
@@ -432,9 +458,15 @@ class JobInfo:
                                                                        "(time=(?P<time>[0-9]*))? *"
                                                                        "(type=(?P<type>[a-z]*))? *"
                                                                        "(.*)")
+        pattern_reset = re.compile(".*Executing post build scripts.*")
         current = None
 
         for line in self.console_log().splitlines():
+            if pattern_reset.match(line):
+                # If the build was aborted while another section was in progress,
+                # stop processing the current section.
+                current = None
+                continue
 
             m = pattern.match(line)
             if not m:
@@ -453,13 +485,17 @@ class JobInfo:
 
                 if current:
                     new.parent = current
+                    current.children.append(new)
 
                 current = new
                 current.start = time
             elif boundary == "end":
                 # End
-                current.end = time
-                current = current.parent
+                if current:
+                    current.end = time
+                    current = current.parent
+                else:
+                    logger.warn("Noticed a end section while no section is in progress")
             else:
                 raise Exception("Unknown boundary %s" % boundary)
 
@@ -487,3 +523,20 @@ class JobInfo:
 
     def sections(self):
         return self.__sections
+
+
+class BuildInfoFetcher:
+
+    def __init__(self, url, cache=None, info_class=BuildInfo):
+        self.url = url
+        self.cache = cache
+        self.info_class = info_class
+
+    def fetch(self, job_name, build_number, fetch_sections=True):
+        info = self.info_class(self,
+                               job_name,
+                               build_number,
+                               cache=self.cache,
+                               fetch_sections=fetch_sections)
+        return info
+

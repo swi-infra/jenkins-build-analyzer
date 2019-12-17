@@ -4,7 +4,7 @@ import argparse
 import sys
 import logging
 
-from src.job_info import JobInfoFetcher
+from src.job_info import BuildInfoFetcher
 from src.svg_printer import SvgPrinter
 from urllib.parse import urlsplit, urljoin
 
@@ -56,7 +56,8 @@ if not url or not job or not args.output:
     parser.print_help()
     sys.exit(1)
 
-job_info = JobInfoFetcher.fetch(url, job, build_number, fetch_sections=True)
+fetcher = BuildInfoFetcher(url)
+build_info = fetcher.fetch(job, build_number, fetch_sections=True)
 
-printer = SvgPrinter(job_info)
+printer = SvgPrinter(build_info)
 printer.print(args.output)

@@ -441,7 +441,7 @@ class SvgPrinter:
             f_html.write(html_content)
 
     def print(self, output):
-        print("Output to %s" % output)
+        logger.debug("Output to %s" % output)
 
         if output.endswith(".svg"):
             self.print_svg(output)
