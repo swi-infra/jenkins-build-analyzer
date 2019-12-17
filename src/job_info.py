@@ -59,6 +59,25 @@ class BuildSection:
         return cnt
 
 
+class PipelineNode:
+
+    def __init__(self, id):
+        self.id = id
+        self.label = None
+        self.branch = None
+        self.header = None
+        self.message = None
+        self.parent = None
+        self.content = {}
+
+    def get_branch(self):
+        if self.branch:
+            return self.branch
+        if self.parent:
+            return self.parent.get_branch()
+        return None
+
+
 class JobInfo:
 
     def __init__(self, url, job_name, build_number, stage=None, fetch_on_init=True, cache=None, fetch_sections=True):
@@ -298,46 +317,51 @@ class JobInfo:
 
         pattern = re.compile("/job/(?P<job>.+)/(?P<bn>\d+)/")
 
-        enclosing_ids = {}
-        node_enclosing_ids = {}
+        nodes = {}
+
         for span in doc.find_all('span'):
             if 'class' not in span.attrs:
                 continue
 
-            if (span.attrs['class'][0] == 'pipeline-new-node' and
-                'enclosingid' in span.attrs and
-                'startid' in span.attrs and
-                'label' in span.attrs):
+            span_class = span.attrs['class'][0]
 
-                start_id = span.attrs['startid']
-                if span.attrs['label'].startswith('Branch: '):
-                    enclosing_ids[start_id] = span.attrs['label'].replace('Branch: ', '')
-                    logger.debug("Branch#%s : %s" % (start_id, enclosing_ids[start_id]))
+            if span_class == 'pipeline-new-node':
+                node_id = span.attrs['nodeid']
 
-            elif (span.attrs['class'][0] == 'pipeline-new-node' and
-                  'nodeid' in span.attrs and
-                  ('enclosingid' in span.attrs or
-                   'startid' in span.attrs)):
+                #start_id = span.attrs['startid']
 
+                node = PipelineNode(node_id)
+                node.header = span.text
                 if 'enclosingid' in span.attrs:
                     enclosing_id = span.attrs['enclosingid']
-                elif 'startid' in span.attrs:
-                    enclosing_id = span.attrs['startid']
+                    if not nodes[enclosing_id]:
+                        logger.error("Node %s does not exist" % enclosing_id)
+                        continue
 
-                node_id = span.attrs['nodeid']
-                node_enclosing_ids[node_id] = enclosing_id
+                    nodes[enclosing_id].content[node_id] = node
+                    node.parent = nodes[enclosing_id]
 
-            elif span.attrs['class'][0].startswith('pipeline-node-'):
-                node_id = span.attrs['class'][0].replace('pipeline-node-', '')
-                if node_id not in node_enclosing_ids:
+                if 'label' in span.attrs:
+                    node.label = span.attrs['label']
+                    if node.label.startswith('Branch: '):
+                        node.branch = span.attrs['label'].replace('Branch: ', '')
+
+                nodes[node_id] = node
+
+            elif span_class.startswith('pipeline-node-'):
+                node_id = span_class.replace('pipeline-node-', '')
+                if node_id not in nodes:
                     logger.warn("Node %s not found" % node_id)
                     logger.warn(node_enclosing_ids)
                     continue
 
+                node = nodes[node_id]
+
                 branch = None
-                enclosing_id = node_enclosing_ids[node_id]
-                if enclosing_id in enclosing_ids:
-                    branch = enclosing_ids[enclosing_id]
+                if node.parent:
+                    branch = node.get_branch()
+                else:
+                    logger.debug("No branch for id %s" % enclosing_id)
 
                 if 'Starting building:' not in span.text:
                     continue
@@ -404,10 +428,10 @@ class JobInfo:
         if self.job_type() != 'freestyle':
             return
 
-        pattern = re.compile("^\[section:(?P<name>[^\]]*)\] (?P<boundary>start|end)? *"
-                                                           "(time=(?P<time>[0-9]*))? *"
-                                                           "(type=(?P<type>[a-z]*))? *"
-                                                           "(.*)")
+        pattern = re.compile("^(?:.\\[95m)?\[section:(?P<name>[^\]]*)\] (?P<boundary>start|end)? *"
+                                                                       "(time=(?P<time>[0-9]*))? *"
+                                                                       "(type=(?P<type>[a-z]*))? *"
+                                                                       "(.*)")
         current = None
 
         for line in self.console_log().splitlines():
@@ -415,6 +439,8 @@ class JobInfo:
             m = pattern.match(line)
             if not m:
                 continue
+
+            logger.debug("Section: %s" % line)
 
             boundary = m.group("boundary")
             name = m.group("name")

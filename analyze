@@ -2,6 +2,7 @@
 
 import argparse
 import sys
+import logging
 
 from src.job_info import JobInfoFetcher
 from src.svg_printer import SvgPrinter
@@ -20,12 +21,17 @@ parser.add_argument('-b', '--build', dest='build_number', default="lastCompleted
 # Output
 parser.add_argument('-o', '--output', dest='output',
                     help="Output path in SVG or PNG or HTML format")
+parser.add_argument('-d', '--debug', dest='debug', action='store_true',
+                    help="Set log level to DEBUG")
 
 args = parser.parse_args()
 
 url = args.url
 job = args.job
 build_number = args.build_number
+
+if args.debug:
+    logging.basicConfig(level=logging.DEBUG)
 
 if url and not job:
     # Try to parse the URL
