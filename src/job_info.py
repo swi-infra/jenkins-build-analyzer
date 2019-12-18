@@ -14,7 +14,7 @@ class BuildNotFoundException(Exception):
 
     def __init__(self, build_info):
 
-        super(BuildNotFoundException, self).__init__("Job %s#%s not found" % (build_info.job_name, build_info.build_number()))
+        super(BuildNotFoundException, self).__init__("Job %s#%s not found" % (build_info.job_name, build_info.build_number))
 
 class BuildSection:
 
@@ -26,15 +26,17 @@ class BuildSection:
         self.start = None
         self.end = None
 
+    @property
     def type(self):
         if self.__type:
             return self.__type
 
         if self.parent:
-            return self.parent.type()
+            return self.parent.type
 
         return None
 
+    @property
     def duration(self):
         if not self.start or not self.end:
             return 0
@@ -109,7 +111,7 @@ class BuildInfo:
         self.__fetch_info()
         if self._fetch_sections == 'done':
             # Only fetch sections if the top build is done
-            self._fetch_sections = self.is_done()
+            self._fetch_sections = self.is_done
         self.__fetch_sub_builds()
         if self._fetch_sections is True:
             self.__determine_sections()
@@ -150,7 +152,7 @@ class BuildInfo:
             logger.error("Unable to parse XML at '%s'" % url)
             raise BuildNotFoundException(self)
 
-        if self.cache and cache_key and not content_cached and self.is_done():
+        if self.cache and cache_key and not content_cached and self.is_done:
             # Cache the content for 5h
             self.cache.set(cache_key, self._raw_data, (5 * 60 * 60))
 
@@ -198,37 +200,42 @@ class BuildInfo:
                 self.__result = "INFRA_FAILURE"
 
         logger.debug("%s#%s: %s %d %d %d %s" % (self.job_name,
-                                                self.build_number(),
+                                                self.build_number,
                                                 self.__job_type,
                                                 self.__start,
                                                 self.__queueing_duration,
                                                 self.__duration,
                                                 self.__result))
 
+    @property
     def job_type(self):
         if not self.__job_type:
             self.__fetch_info()
 
         return self.__job_type
 
+    @property
     def start(self):
         if not self.__start:
             self.__fetch_info()
 
         return self.__start
 
+    @property
     def queueing_duration(self):
         if not self.__queueing_duration:
             self.__fetch_info()
 
         return self.__queueing_duration
 
+    @property
     def duration(self):
         if not self.__duration:
             self.__fetch_info()
 
         return self.__duration
 
+    @property
     def node_name(self):
         if self.__node_name:
             return self.__node_name
@@ -242,6 +249,7 @@ class BuildInfo:
 
         return self.__node_name
 
+    @property
     def build_number(self):
         if self._build_number != None:
             return self._build_number
@@ -252,10 +260,12 @@ class BuildInfo:
         self._build_number = int(self.build_xml.find('./number').text)
         return self._build_number
 
+    @property
     def is_done(self):
-        return (self.result() != 'IN_PROGRESS') and \
-               (self.result() != 'UNKNOWN')
+        return (self.result != 'IN_PROGRESS') and \
+               (self.result != 'UNKNOWN')
 
+    @property
     def result(self):
         if self.__result:
             return self.__result
@@ -277,18 +287,20 @@ class BuildInfo:
 
         return self.__result
 
+    @property
     def failure_causes(self):
         if not self.__failure_causes:
             self.__fetch_info()
 
         return self.__failure_causes
 
+    @property
     def console_log(self):
         if self._console_log:
             return self._console_log
 
         url_extra = 'consoleText'
-        if self.job_type() == 'pipeline':
+        if self.job_type == 'pipeline':
             url_extra = 'logText/progressiveHtml'
 
         raw_data, content_cached, cache_key = self.__fetch_build_data(url_extra)
@@ -311,7 +323,7 @@ class BuildInfo:
     def __parse_build_flow_log(self):
         pattern = re.compile("(?P<stage>) *Build (?P<job>.+) #(?P<bn>\d+) started")
 
-        for line in self.console_log().splitlines():
+        for line in self.console_log.splitlines():
 
             m = pattern.match(line)
             if not m:
@@ -339,7 +351,7 @@ class BuildInfo:
     def __parse_pipeline_log(self):
 
         try:
-            doc = BeautifulSoup('<html>{0}</html>'.format(self.console_log()),
+            doc = BeautifulSoup('<html>{0}</html>'.format(self.console_log),
                                 features="html.parser")
         except ET.ParseError as e:
             logger.error("Unable to parse HTML from '%s'" % self.console_log_url())
@@ -434,24 +446,24 @@ class BuildInfo:
     def __fetch_sub_builds(self):
         self.__sub_builds = []
 
-        if self.job_type() != 'pipeline' and \
-           self.job_type() != 'buildFlow':
+        if self.job_type != 'pipeline' and \
+           self.job_type != 'buildFlow':
             return
 
         # Parse log as HTML
-        if self.job_type() == 'pipeline':
+        if self.job_type == 'pipeline':
             self.__parse_pipeline_log()
 
         # Parse log
-        elif self.job_type() == 'buildFlow':
+        elif self.job_type == 'buildFlow':
             self.__parse_build_flow_log()
 
-        logger.info("%s#%s: %d sub-build(s)" % (self.job_name, self.build_number(), len(self.__sub_builds)))
+        logger.info("%s#%s: %d sub-build(s)" % (self.job_name, self.build_number, len(self.__sub_builds)))
 
     def __determine_sections(self):
         self.__sections = []
 
-        if self.job_type() != 'freestyle':
+        if self.job_type != 'freestyle':
             return
 
         pattern = re.compile("^(?:.\\[95m)?\[section:(?P<name>[^\]]*)\] (?P<boundary>start|end)? *"
@@ -461,7 +473,7 @@ class BuildInfo:
         pattern_reset = re.compile(".*Executing post build scripts.*")
         current = None
 
-        for line in self.console_log().splitlines():
+        for line in self.console_log.splitlines():
             if pattern_reset.match(line):
                 # If the build was aborted while another section was in progress,
                 # stop processing the current section.
@@ -501,26 +513,29 @@ class BuildInfo:
 
         for section in self.__sections:
             logger.debug("Section: %s %s %s" % (section.name,
-                                                section.type(),
-                                                section.duration()))
+                                                section.type,
+                                                section.duration))
 
+    @property
     def sub_builds(self):
         if self.__sub_builds is None:
             self.__fetch_sub_builds()
 
         return self.__sub_builds
 
+    @property
     def all_builds(self):
         if self.__all_builds is None:
             blds = [self]
 
-            for bld in self.sub_builds():
-                blds += bld.all_builds()
+            for bld in self.sub_builds:
+                blds += bld.all_builds
 
             self.__all_builds = blds
 
         return self.__all_builds
 
+    @property
     def sections(self):
         return self.__sections
 

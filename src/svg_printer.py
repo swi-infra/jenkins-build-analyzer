@@ -142,17 +142,17 @@ class SvgPrinter:
 
     def __determine_sizes(self):
 
-        self.base_timestamp = self.job_info.start()
+        self.base_timestamp = self.job_info.start
 
         # Height based on number of builds to show
-        self.box_height = self.build_height*len(self.job_info.all_builds())
+        self.box_height = self.build_height*len(self.job_info.all_builds)
         self.total_height = 2*self.margin + self.box_height
 
         # Width based on duration
-        self.max_duration = self.job_info.duration()
-        if self.job_info.result() == "IN_PROGRESS":
-            for build in self.job_info.all_builds():
-                self.max_duration = max(self.max_duration, build.start() + build.duration() - self.base_timestamp)
+        self.max_duration = self.job_info.duration
+        if self.job_info.result == "IN_PROGRESS":
+            for build in self.job_info.all_builds:
+                self.max_duration = max(self.max_duration, build.start + build.duration - self.base_timestamp)
 
         self.max_duration = math.ceil(self.max_duration / 1000 / 60 / 5) * 5 # in minutes, rounded up
 
@@ -196,14 +196,14 @@ class SvgPrinter:
             offset = 0
         offset_px = offset * self.minute_width
 
-        duration = section.duration() / 1000 / 60
+        duration = section.duration / 1000 / 60
         if not section.end:
             duration = max_duration
         duration_px = duration * self.minute_width
 
         class_name = "type"
-        if section.type():
-            class_name = "type_%s" % section.type()
+        if section.type:
+            class_name = "type_%s" % section.type
 
         section_index = section.parents_cnt()
         if section_index >= 4:
@@ -235,13 +235,13 @@ class SvgPrinter:
     def __render_queue(self, build, build_index):
         dwg = self.__dwg
 
-        if build.queueing_duration() == 0:
+        if build.queueing_duration == 0:
             return
 
-        offset = (build.start() - build.queueing_duration() - self.base_timestamp) / 1000 / 60
+        offset = (build.start - build.queueing_duration - self.base_timestamp) / 1000 / 60
         offset_px = offset * self.minute_width
 
-        duration = build.queueing_duration() / 1000 / 60
+        duration = build.queueing_duration / 1000 / 60
         duration_px = duration * self.minute_width
 
         class_name = "queue"
@@ -258,30 +258,30 @@ class SvgPrinter:
 
         self.__render_queue(build, index)
 
-        offset = (build.start() - self.base_timestamp)  / 1000 / 60
+        offset = (build.start - self.base_timestamp)  / 1000 / 60
         offset_px = offset * self.minute_width
 
-        duration = build.duration() / 1000 / 60
-        if build.result() == "IN_PROGRESS":
+        duration = build.duration / 1000 / 60
+        if build.result == "IN_PROGRESS":
             duration = self.max_duration - offset
         duration_px = duration * self.minute_width
 
         class_name = 'other'
-        if build.result() == "SUCCESS":
+        if build.result == "SUCCESS":
             class_name = 'success'
-        elif build.result() == "ABORTED":
+        elif build.result == "ABORTED":
             class_name = 'aborted'
-        elif build.result() == "INFRA_FAILURE":
+        elif build.result == "INFRA_FAILURE":
             class_name = 'infra_failure'
-        elif build.result() == "FAILURE":
+        elif build.result == "FAILURE":
             class_name = 'failure'
-        elif build.result() == "UNSTABLE":
+        elif build.result == "UNSTABLE":
             class_name = 'unstable'
-        elif build.result() == "IN_PROGRESS":
+        elif build.result == "IN_PROGRESS":
             class_name = 'in_progress'
 
-        if build.job_type() == 'pipeline' or \
-           build.job_type() == 'buildFlow':
+        if build.job_type == 'pipeline' or \
+           build.job_type == 'buildFlow':
           class_name = "pipe_%s" % class_name
 
         x = self.margin + offset_px
@@ -300,15 +300,15 @@ class SvgPrinter:
                          class_=class_name))
 
         section_max_duration = duration
-        section_last_end = build.start()
-        if build.sections():
-            for section in build.sections():
-                    if section_last_end and not section.parent:
-                        section_max_duration -= (section.start - section_last_end) / 1000 / 60
-                    self.__render_section(section, index, section_max_duration)
-                    if section.end and not section.parent:
-                        section_max_duration -= (section.duration() / 1000 / 60)
-                        section_last_end = section.end
+        section_last_end = build.start
+        if build.sections:
+            for section in build.sections:
+                if section_last_end and not section.parent:
+                    section_max_duration -= (section.start - section_last_end) / 1000 / 60
+                self.__render_section(section, index, section_max_duration)
+                if section.end and not section.parent:
+                    section_max_duration -= (section.duration / 1000 / 60)
+                    section_last_end = section.end
 
         build_info = ""
         if build.stage:
@@ -319,8 +319,8 @@ class SvgPrinter:
                          class_="min"))
 
         if self.show_time:
-            queue_time = self.__get_time(build.queueing_duration())
-            exec_time = self.__get_time(build.duration())
+            queue_time = self.__get_time(build.queueing_duration)
+            exec_time = self.__get_time(build.duration)
             build_time = "[queue: %s; build: %s]" % (queue_time, exec_time)
 
             dwg.add(dwg.text(build_time,
@@ -329,7 +329,7 @@ class SvgPrinter:
 
     def __render_builds(self):
         current_idx = 0
-        for build in self.job_info.all_builds():
+        for build in self.job_info.all_builds:
             self.__render_build(build, current_idx)
             current_idx += 1
 
@@ -411,15 +411,15 @@ class SvgPrinter:
                     '#' + tooltip_id)
             map_content.append(area)
 
-            queue_time = self.__get_time(build.queueing_duration())
-            exec_time = self.__get_time(build.duration())
+            queue_time = self.__get_time(build.queueing_duration)
+            exec_time = self.__get_time(build.duration)
             tooltip_lines = []
             tooltip_lines.append("<b>Queue Time:</b> %s<br/>" % queue_time)
             tooltip_lines.append("<b>Exec Time:</b> %s<br/>" % exec_time)
-            tooltip_lines.append("<b>Result:</b> %s<br/>" % build.result())
-            if len(build.failure_causes()) != 0:
+            tooltip_lines.append("<b>Result:</b> %s<br/>" % build.result)
+            if len(build.failure_causes) != 0:
                 tooltip_lines.append("<b>Failure Causes:</b><br/>")
-                for cause in build.failure_causes():
+                for cause in build.failure_causes:
                     tooltip_lines.append("- <em>%s:</em><br/>" % html.escape(cause['name']))
                     if cause.get('description'):
                         tooltip_lines.append('<p class="failure-cause">%s</p>' % html.escape(cause['description']))
