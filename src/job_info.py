@@ -381,7 +381,7 @@ class BuildInfo:
                 "<html>{0}</html>".format(self.console_log), features="html.parser"
             )
         except ET.ParseError as e:
-            logger.error("Unable to parse HTML from '%s'" % self.console_log_url())
+            logger.error("Unable to parse HTML from '%s'" % self.build_url())
             logger.error(e)
             return
 
