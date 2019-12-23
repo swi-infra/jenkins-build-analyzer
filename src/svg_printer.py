@@ -1,6 +1,4 @@
-
 import svgwrite
-import coloredlogs
 import logging
 import math
 import tempfile
@@ -119,8 +117,8 @@ $(function() {
 });
 </script>"""
 
-class SvgPrinter:
 
+class SvgPrinter:
     def __init__(self, job_info):
         self.job_info = job_info
 
@@ -145,19 +143,24 @@ class SvgPrinter:
         self.base_timestamp = self.job_info.start
 
         # Height based on number of builds to show
-        self.box_height = self.build_height*len(self.job_info.all_builds)
-        self.total_height = 2*self.margin + self.box_height
+        self.box_height = self.build_height * len(self.job_info.all_builds)
+        self.total_height = 2 * self.margin + self.box_height
 
         # Width based on duration
         self.max_duration = self.job_info.duration
         if self.job_info.result == "IN_PROGRESS":
             for build in self.job_info.all_builds:
-                self.max_duration = max(self.max_duration, build.start + build.duration - self.base_timestamp)
+                self.max_duration = max(
+                    self.max_duration,
+                    build.start + build.duration - self.base_timestamp,
+                )
 
-        self.max_duration = math.ceil(self.max_duration / 1000 / 60 / 5) * 5 # in minutes, rounded up
+        self.max_duration = (
+            math.ceil(self.max_duration / 1000 / 60 / 5) * 5
+        )  # in minutes, rounded up
 
-        self.box_width = self.minute_width*self.max_duration
-        self.total_width = 2*self.margin + self.box_width + self.extra_width
+        self.box_width = self.minute_width * self.max_duration
+        self.total_width = 2 * self.margin + self.box_width + self.extra_width
 
         logger.debug("Total: %d x %d" % (self.total_height, self.total_width))
 
@@ -166,9 +169,13 @@ class SvgPrinter:
 
         self.current_pos = self.margin
 
-        dwg.add(dwg.rect(insert=(self.margin, self.margin),
-                         size=(self.box_width, self.box_height),
-                         class_='box'))
+        dwg.add(
+            dwg.rect(
+                insert=(self.margin, self.margin),
+                size=(self.box_width, self.box_height),
+                class_="box",
+            )
+        )
 
         for x in range(0, self.max_duration):
 
@@ -178,13 +185,21 @@ class SvgPrinter:
                 if x % 60 == 0:
                     class_name = "min60"
 
-                dwg.add(dwg.text("%dmin" % x,
-                                 insert=(self.current_pos, self.margin-5),
-                                 class_="min"))
+                dwg.add(
+                    dwg.text(
+                        "%dmin" % x,
+                        insert=(self.current_pos, self.margin - 5),
+                        class_="min",
+                    )
+                )
 
-            dwg.add(dwg.line(start=(self.current_pos, self.margin),
-                             end=(self.current_pos, self.total_height-self.margin),
-                             class_=class_name))
+            dwg.add(
+                dwg.line(
+                    start=(self.current_pos, self.margin),
+                    end=(self.current_pos, self.total_height - self.margin),
+                    class_=class_name,
+                )
+            )
 
             self.current_pos += self.minute_width
 
@@ -207,25 +222,29 @@ class SvgPrinter:
 
         section_index = section.parents_cnt()
         if section_index >= 4:
-          section_index = 4
+            section_index = 4
 
         x = self.margin + offset_px
-        y = self.margin + build_index*self.build_height
+        y = self.margin + build_index * self.build_height
 
-        dwg.add(dwg.rect(insert=(x, y + self.build_height - self.build_padding),
-                         size=(duration_px, (1 + section_index)*self.section_height),
-                         class_=class_name))
+        dwg.add(
+            dwg.rect(
+                insert=(x, y + self.build_height - self.build_padding),
+                size=(duration_px, (1 + section_index) * self.section_height),
+                class_=class_name,
+            )
+        )
 
     def __get_time(self, milliseconds):
 
-        d = datetime(1,1,1) + timedelta(milliseconds=int(milliseconds))
-        time = [d.day -1 , d.hour, d.minute, d.second + (milliseconds % 1000)/1000.0]
-        time_suffix = ['d', 'h', 'm', 's']
+        d = datetime(1, 1, 1) + timedelta(milliseconds=int(milliseconds))
+        time = [d.day - 1, d.hour, d.minute, d.second + (milliseconds % 1000) / 1000.0]
+        time_suffix = ["d", "h", "m", "s"]
 
         val = []
         for i in range(len(time)):
             if time[i] > 0:
-                if time_suffix[i] == 's':
+                if time_suffix[i] == "s":
                     s = "%.1f%s" % (time[i], time_suffix[i])
                 else:
                     s = "%d%s" % (time[i], time_suffix[i])
@@ -238,7 +257,9 @@ class SvgPrinter:
         if build.queueing_duration == 0:
             return
 
-        offset = (build.start - build.queueing_duration - self.base_timestamp) / 1000 / 60
+        offset = (
+            (build.start - build.queueing_duration - self.base_timestamp) / 1000 / 60
+        )
         offset_px = offset * self.minute_width
 
         duration = build.queueing_duration / 1000 / 60
@@ -247,18 +268,22 @@ class SvgPrinter:
         class_name = "queue"
 
         x = self.margin + offset_px
-        y = self.margin + build_index*self.build_height
+        y = self.margin + build_index * self.build_height
 
-        dwg.add(dwg.rect(insert=(x, y + self.build_padding),
-                         size=(duration_px, self.build_height - 2*self.build_padding),
-                         class_=class_name))
+        dwg.add(
+            dwg.rect(
+                insert=(x, y + self.build_padding),
+                size=(duration_px, self.build_height - 2 * self.build_padding),
+                class_=class_name,
+            )
+        )
 
     def __render_build(self, build, index):
         dwg = self.__dwg
 
         self.__render_queue(build, index)
 
-        offset = (build.start - self.base_timestamp)  / 1000 / 60
+        offset = (build.start - self.base_timestamp) / 1000 / 60
         offset_px = offset * self.minute_width
 
         duration = build.duration / 1000 / 60
@@ -266,66 +291,75 @@ class SvgPrinter:
             duration = self.max_duration - offset
         duration_px = duration * self.minute_width
 
-        class_name = 'other'
+        class_name = "other"
         if build.result == "SUCCESS":
-            class_name = 'success'
+            class_name = "success"
         elif build.result == "ABORTED":
-            class_name = 'aborted'
+            class_name = "aborted"
         elif build.result == "INFRA_FAILURE":
-            class_name = 'infra_failure'
+            class_name = "infra_failure"
         elif build.result == "FAILURE":
-            class_name = 'failure'
+            class_name = "failure"
         elif build.result == "UNSTABLE":
-            class_name = 'unstable'
+            class_name = "unstable"
         elif build.result == "IN_PROGRESS":
-            class_name = 'in_progress'
+            class_name = "in_progress"
 
-        if build.job_type == 'pipeline' or \
-           build.job_type == 'buildFlow':
-          class_name = "pipe_%s" % class_name
+        if build.job_type == "pipeline" or build.job_type == "buildFlow":
+            class_name = "pipe_%s" % class_name
 
         x = self.margin + offset_px
-        y = self.margin + index*self.build_height
+        y = self.margin + index * self.build_height
 
         build_id = "%s#%s" % (build.job_name, build.build_number)
 
         build_r = {
             "build": build,
             "insert": (x, y + self.build_padding),
-            "size": (duration_px, self.build_height - 2*self.build_padding)
+            "size": (duration_px, self.build_height - 2 * self.build_padding),
         }
         self.rect_builds[build_id] = build_r
-        dwg.add(dwg.rect(insert=build_r["insert"],
-                         size=build_r["size"],
-                         class_=class_name))
+        dwg.add(
+            dwg.rect(insert=build_r["insert"], size=build_r["size"], class_=class_name)
+        )
 
         section_max_duration = duration
         section_last_end = build.start
         if build.sections:
             for section in build.sections:
                 if section_last_end and not section.parent:
-                    section_max_duration -= (section.start - section_last_end) / 1000 / 60
+                    section_max_duration -= (
+                        (section.start - section_last_end) / 1000 / 60
+                    )
                 self.__render_section(section, index, section_max_duration)
                 if section.end and not section.parent:
-                    section_max_duration -= (section.duration / 1000 / 60)
+                    section_max_duration -= section.duration / 1000 / 60
                     section_last_end = section.end
 
         build_info = ""
         if build.stage:
             build_info = "[%s] " % build.stage
         build_info += build_id
-        dwg.add(dwg.text(build_info,
-                         insert=(x + 5, y + self.build_height - self.build_padding - 8),
-                         class_="min"))
+        dwg.add(
+            dwg.text(
+                build_info,
+                insert=(x + 5, y + self.build_height - self.build_padding - 8),
+                class_="min",
+            )
+        )
 
         if self.show_time:
             queue_time = self.__get_time(build.queueing_duration)
             exec_time = self.__get_time(build.duration)
             build_time = "[queue: %s; build: %s]" % (queue_time, exec_time)
 
-            dwg.add(dwg.text(build_time,
-                             insert=(x + 5, y + self.build_height - self.build_padding - 1),
-                             class_="time"))
+            dwg.add(
+                dwg.text(
+                    build_time,
+                    insert=(x + 5, y + self.build_height - self.build_padding - 1),
+                    class_="time",
+                )
+            )
 
     def __render_builds(self):
         current_idx = 0
@@ -336,9 +370,9 @@ class SvgPrinter:
     def print_svg(self, output):
         self.__determine_sizes()
 
-        self.__dwg = svgwrite.Drawing(filename=output,
-                                      size=(self.total_width, self.total_height),
-                                      debug=True)
+        self.__dwg = svgwrite.Drawing(
+            filename=output, size=(self.total_width, self.total_height), debug=True
+        )
 
         dwg = self.__dwg
 
@@ -346,9 +380,7 @@ class SvgPrinter:
         dwg.defs.add(dwg.style(STYLES))
 
         # Background
-        dwg.add(dwg.rect(insert=(0, 0),
-                         size=('100%', '100%'),
-                         class_='background'))
+        dwg.add(dwg.rect(insert=(0, 0), size=("100%", "100%"), class_="background"))
 
         # Render grid
         self.__render_grid()
@@ -388,27 +420,30 @@ class SvgPrinter:
         with self.print_svg_to_tmp() as f_svg:
             svg_content = f_svg.read()
 
-        title = "%s #%s" % (self.job_info.job_name,
-                            self.job_info.build_number)
+        title = "%s #%s" % (self.job_info.job_name, self.job_info.build_number)
 
-        img_src = "data:image/svg+xml;base64,%s" % \
-                  u''.join(base64.encodestring(svg_content).decode('utf-8').splitlines())
+        img_src = "data:image/svg+xml;base64,%s" % u"".join(
+            base64.encodestring(svg_content).decode("utf-8").splitlines()
+        )
 
         map_content = []
         tooltips_content = []
         for build_r in self.rect_builds.values():
             build = build_r["build"]
             link = build.build_url()
-            tooltip_id = "tooltip-%s-%s" % (build.job_name,
-                                            build.build_number)
-            tooltip_id = tooltip_id.replace('.', '_')
-            area = '<area shape="rect" coords="%d,%d,%d,%d" href="%s" data-tooltip="%s"/>' % \
-                   (build_r["insert"][0],
+            tooltip_id = "tooltip-%s-%s" % (build.job_name, build.build_number)
+            tooltip_id = tooltip_id.replace(".", "_")
+            area = (
+                '<area shape="rect" coords="%d,%d,%d,%d" href="%s" data-tooltip="%s"/>'
+                % (
+                    build_r["insert"][0],
                     build_r["insert"][1],
                     build_r["insert"][0] + build_r["size"][0],
                     build_r["insert"][1] + build_r["size"][1],
                     link,
-                    '#' + tooltip_id)
+                    "#" + tooltip_id,
+                )
+            )
             map_content.append(area)
 
             queue_time = self.__get_time(build.queueing_duration)
@@ -420,24 +455,33 @@ class SvgPrinter:
             if len(build.failure_causes) != 0:
                 tooltip_lines.append("<b>Failure Causes:</b><br/>")
                 for cause in build.failure_causes:
-                    tooltip_lines.append("- <em>%s:</em><br/>" % html.escape(cause['name']))
-                    if cause.get('description'):
-                        tooltip_lines.append('<p class="failure-cause">%s</p>' % html.escape(cause['description']))
+                    tooltip_lines.append(
+                        "- <em>%s:</em><br/>" % html.escape(cause["name"])
+                    )
+                    if cause.get("description"):
+                        tooltip_lines.append(
+                            '<p class="failure-cause">%s</p>'
+                            % html.escape(cause["description"])
+                        )
 
-            tooltip = '<div class="tooltip" id="%s">%s</div>' % \
-                        (tooltip_id, "\n".join(tooltip_lines))
+            tooltip = '<div class="tooltip" id="%s">%s</div>' % (
+                tooltip_id,
+                "\n".join(tooltip_lines),
+            )
             tooltips_content.append(tooltip)
 
         head_content = ""
         if self.show_infobox:
             head_content += MAPHIGHLIGHT_SCRIPT
 
-        with open(output, 'w') as f_html:
-            html_content = HTML_TMPL % (title,
-                                        head_content,
-                                        img_src,
-                                        "\n".join(map_content),
-                                        "\n".join(tooltips_content))
+        with open(output, "w") as f_html:
+            html_content = HTML_TMPL % (
+                title,
+                head_content,
+                img_src,
+                "\n".join(map_content),
+                "\n".join(tooltips_content),
+            )
             f_html.write(html_content)
 
     def print(self, output):
@@ -451,5 +495,3 @@ class SvgPrinter:
             self.print_html(output)
         else:
             raise Exception("Format not supported")
-
-
