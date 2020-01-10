@@ -108,6 +108,8 @@ class BuildInfo:
         self.build_xml = None
         self._raw_data = None
 
+        self.__description = None
+        self.__failure_causes = []
         self._console_log = None
 
         self.cache = cache
@@ -194,6 +196,10 @@ class BuildInfo:
             self.__queueing_duration = int(
                 tree.find("./action/queuingDurationMillis").text
             )
+
+        logger.info(tree.find("./description"))
+        if tree.find("./description") is not None:
+            self.__description = tree.find("./description").text
 
         self.__failure_causes = []
         for cause_elmt in tree.iterfind("./action/foundFailureCause"):
@@ -307,6 +313,13 @@ class BuildInfo:
         self.__result = result
 
         return self.__result
+
+    @property
+    def description(self):
+        if self.__description is None:
+            self.__fetch_info()
+
+        return self.__description
 
     @property
     def failure_causes(self):

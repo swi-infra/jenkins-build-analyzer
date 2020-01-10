@@ -68,6 +68,12 @@ HTML_TMPL = """<!DOCTYPE html>
             font-size: small;
             padding: 5px;
         }
+        .description {
+            padding-left: 6px;
+        }
+        .description a {
+            color: white;
+        }
         .failure-cause {
             padding: 4px;
             padding-left: 6px;
@@ -452,6 +458,12 @@ class SvgPrinter:
             tooltip_lines.append("<b>Queue Time:</b> %s<br/>" % queue_time)
             tooltip_lines.append("<b>Exec Time:</b> %s<br/>" % exec_time)
             tooltip_lines.append("<b>Result:</b> %s<br/>" % build.result)
+            if build.description:
+                tooltip_lines.append(
+                    '<b>Description:</b><br/><div class="description">%s</div>'
+                    % (build.description)
+                )
+
             if len(build.failure_causes) != 0:
                 tooltip_lines.append("<b>Failure Causes:</b><br/>")
                 for cause in build.failure_causes:
