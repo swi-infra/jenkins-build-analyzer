@@ -109,7 +109,7 @@ class BuildInfo:
         self._raw_data = None
 
         self.__description = None
-        self.__failure_causes = []
+        self.__failure_causes = None
         self._console_log = None
 
         self.cache = cache
@@ -217,9 +217,6 @@ class BuildInfo:
                 cause["categories"].append(cat.text)
             self.__failure_causes.append(cause)
 
-            if (self.__result == "FAILURE") and ("retrigger" in cause["categories"]):
-                self.__result = "INFRA_FAILURE"
-
         logger.debug(
             "%s#%s: %s %d %d %d %s"
             % (
@@ -309,6 +306,12 @@ class BuildInfo:
             result = self.build_xml.find("./result").text
         else:
             result = "UNKNOWN"
+
+        if result == "FAILURE":
+            for cause in self.failure_causes:
+                if ("retrigger" in cause["categories"]):
+                    result = "INFRA_FAILURE"
+                    break
 
         self.__result = result
 

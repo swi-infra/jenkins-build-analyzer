@@ -69,7 +69,11 @@ HTML_TMPL = """<!DOCTYPE html>
             padding: 5px;
         }
         .description {
+            padding: 4px;
             padding-left: 6px;
+            background: rgba(50, 50, 50, .2);
+            border-radius: 3px;
+            margin: 2px;
         }
         .description a {
             color: white;
@@ -77,6 +81,8 @@ HTML_TMPL = """<!DOCTYPE html>
         .failure-cause {
             padding: 4px;
             padding-left: 6px;
+            background: rgba(50, 50, 50, .2);
+            border-radius: 3px;
             margin: 2px;
             margin-left: 6px;
             border-left: 2px solid #eee;
