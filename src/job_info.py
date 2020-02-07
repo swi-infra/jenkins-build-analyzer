@@ -79,6 +79,7 @@ class BuildInfo:
         fetch_on_init=True,
         cache=None,
         fetch_sections=True,
+        upstream=None
     ):
         self.fetcher = fetcher
         self.job_name = job_name
@@ -99,6 +100,9 @@ class BuildInfo:
         self.__result = None
         self.__node_name = None
 
+        self.user = None
+
+        self.upstream = upstream
         self.__sub_builds = None
         self.__all_builds = None
 
@@ -200,6 +204,21 @@ class BuildInfo:
         logger.info(tree.find("./description"))
         if tree.find("./description") is not None:
             self.__description = tree.find("./description").text
+
+        for cause_elmt in tree.iterfind("./action/cause"):
+            cause_class = cause_elmt.get("_class")
+            if cause_class == 'hudson.model.Cause$UpstreamCause':
+                upstream_job = cause_elmt.findtext('upstreamProject')
+                upstream_build = cause_elmt.findtext('upstreamBuild')
+                if upstream_job and upstream_build:
+                    self.upstream = self.fetcher.get_build(upstream_job, upstream_build, fetch_sections=False)
+            elif cause_class == "hudson.model.Cause$UserIdCause":
+                user_id = cause_elmt.findtext('userId')
+                user_name = cause_elmt.findtext('userName')
+                self.user = {
+                    'user_id': user_id,
+                    'user_name': user_name
+                }
 
         self.__failure_causes = []
         for cause_elmt in tree.iterfind("./action/foundFailureCause"):
@@ -356,13 +375,10 @@ class BuildInfo:
         return self._console_log
 
     def create_sub_build(self, job_name, build_number, stage):
-        return BuildInfo(
-            self.fetcher,
-            job_name,
-            build_number,
-            stage=stage,
-            fetch_sections=self._fetch_sections,
-        )
+        sub_build = self.fetcher.get_build(job_name, build_number)
+        sub_build.stage = stage
+        sub_build.upstream = self
+        return sub_build
 
     def __parse_build_flow_log(self):
         pattern = re.compile(r"(?P<stage>) *Build (?P<job>.+) #(?P<bn>\d+) started")
@@ -589,17 +605,33 @@ class BuildInfo:
 
 
 class BuildInfoFetcher:
-    def __init__(self, url, cache=None, info_class=BuildInfo):
+    def __init__(self, url, cache=None, info_class=BuildInfo, fetch_sections=True):
         self.url = url
         self.cache = cache
         self.info_class = info_class
+        self.fetch_sections = fetch_sections
+        self.builds = {}
 
-    def fetch(self, job_name, build_number, fetch_sections=True):
-        info = self.info_class(
-            self,
-            job_name,
-            build_number,
-            cache=self.cache,
-            fetch_sections=fetch_sections,
-        )
-        return info
+    def _create_build(self, job_name, build_number, fetch_sections=None):
+        if fetch_sections is None:
+            fetch_sections = self.fetch_sections
+        return self.info_class(
+                self,
+                job_name,
+                build_number,
+                fetch_on_init=False,
+                cache=self.cache,
+                fetch_sections=fetch_sections,
+            )
+
+    def get_build(self, job_name, build_number, fetch=True, fetch_sections=None):
+        build_id = "%s #%s" % (job_name, build_number)
+        if build_id not in self.builds:
+            self.builds[build_id] = self._create_build(job_name, build_number)
+            if fetch:
+                self.builds[build_id].fetch()
+
+        return self.builds[build_id]
+
+    def fetch(self, job_name, build_number):
+        return self.get_build(job_name, build_number)
