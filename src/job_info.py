@@ -109,6 +109,8 @@ class BuildInfo:
         self._fetch_sections = fetch_sections
         self.__sections = None
 
+        self.__parameters = None
+
         self.build_xml = None
         self._raw_data = None
 
@@ -201,7 +203,6 @@ class BuildInfo:
                 tree.find("./action/queuingDurationMillis").text
             )
 
-        logger.info(tree.find("./description"))
         if tree.find("./description") is not None:
             self.__description = tree.find("./description").text
 
@@ -235,6 +236,15 @@ class BuildInfo:
             for cat in cause_elmt.iter("category"):
                 cause["categories"].append(cat.text)
             self.__failure_causes.append(cause)
+
+        self.__parameters = {}
+        for param_elmt in tree.iterfind("./action/parameter"):
+            param = {
+                "class_name": param_elmt.attrib["_class"],
+                "name": param_elmt.find("name").text,
+                "value": param_elmt.find("value").text,
+            }
+            self.__parameters[param["name"]] = param
 
         logger.debug(
             "%s#%s: %s %d %d %d %s"
@@ -276,6 +286,13 @@ class BuildInfo:
             self.__fetch_info()
 
         return self.__duration
+
+    @property
+    def parameters(self):
+        if self.__parameters is None:
+            self.__fetch_info()
+
+        return self.__parameters
 
     @property
     def node_name(self):
