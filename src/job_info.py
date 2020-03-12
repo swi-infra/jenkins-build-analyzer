@@ -242,10 +242,10 @@ class BuildInfo:
             name_elmt = param_elmt.find("name")
             value_elmt = param_elmt.find("value")
             if name_elmt == None:
-                logger.warn("Missing name element for parameter %s" % param_elmt)
+                logger.warning("Missing name element for parameter %s" % param_elmt)
                 continue
             if value_elmt == None:
-                logger.warn("Missing value element for parameter %s" % name_elmt.text)
+                logger.warning("Missing value element for parameter %s" % name_elmt.text)
                 continue
             param = {
                 "class_name": param_elmt.attrib["_class"],
@@ -478,7 +478,7 @@ class BuildInfo:
             elif span_class.startswith("pipeline-node-"):
                 node_id = span_class.replace("pipeline-node-", "")
                 if node_id not in nodes:
-                    logger.warn("Node %s not found" % node_id)
+                    logger.warning("Node %s not found" % node_id)
                     continue
 
                 node = nodes[node_id]
@@ -501,7 +501,7 @@ class BuildInfo:
                         break
 
                 if m is None:
-                    logger.warn("No link found for %s" % span.text)
+                    logger.warning("No link found for %s" % span.text)
                     continue
 
                 job_name = m.group("job")
@@ -522,7 +522,7 @@ class BuildInfo:
 
                     except BuildNotFoundException as e:
                         logger.error(e)
-                        logger.warn(branch)
+                        logger.warning(branch)
 
             else:
                 logger.debug(span)
@@ -596,7 +596,7 @@ class BuildInfo:
                     current.end = time
                     current = current.parent
                 else:
-                    logger.warn("Noticed a end section while no section is in progress")
+                    logger.warning("Noticed a end section while no section is in progress")
             else:
                 raise Exception("Unknown boundary %s" % boundary)
 
