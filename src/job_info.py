@@ -239,10 +239,18 @@ class BuildInfo:
 
         self.__parameters = {}
         for param_elmt in tree.iterfind("./action/parameter"):
+            name_elmt = param_elmt.find("name")
+            value_elmt = param_elmt.find("value")
+            if name_elmt == None:
+                logger.warn("Missing name element for parameter %s" % param_elmt)
+                continue
+            if value_elmt == None:
+                logger.warn("Missing value element for parameter %s" % name_elmt.text)
+                continue
             param = {
                 "class_name": param_elmt.attrib["_class"],
-                "name": param_elmt.find("name").text,
-                "value": param_elmt.find("value").text,
+                "name": name_elmt.text,
+                "value": value_elmt.text,
             }
             self.__parameters[param["name"]] = param
 
