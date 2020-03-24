@@ -99,6 +99,10 @@ HTML_TMPL = """<!DOCTYPE html>
             border-left: 2px solid #eee;
             font-family: monospace;
         }
+        .sections .error {
+            color: #ffbfbf;
+            font-weight: 700;
+        }
     </style>
     %s
 </head>
@@ -499,7 +503,10 @@ class SvgPrinter:
                 tooltip_lines.append('<div class="sections">')
                 for section in build.sections:
                     padding = "&nbsp;" * section.parents_cnt * 2
-                    tooltip_lines.append("%s⊩ %s<br/>" % (padding, section))
+                    txt = section
+                    if section.end is None:
+                        txt = '<span class="error">%s</span>' % section
+                    tooltip_lines.append("%s⊩ %s<br/>" % (padding, txt))
                 tooltip_lines.append("</div>")
 
             tooltip = '<div class="tooltip" id="%s">%s</div>' % (
