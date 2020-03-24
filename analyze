@@ -57,7 +57,7 @@ if not url or not job or not args.output:
     sys.exit(1)
 
 fetcher = BuildInfoFetcher(url)
-build_info = fetcher.fetch(job, build_number, fetch_sections=True)
+build_info = fetcher.get_build(job, build_number, fetch_sections=True)
 
 printer = SvgPrinter(build_info)
 printer.print(args.output)

@@ -170,7 +170,7 @@ class BuildInfo:
         try:
             self.build_xml = ET.XML(self._raw_data)
         except ET.ParseError:
-            logger.error("Unable to parse XML at '%s'" % self.build_url)
+            logger.error("Unable to parse XML at '%s'" % self.build_url())
             raise BuildNotFoundException(self)
 
         if self.cache and cache_key and not content_cached and self.is_done:
@@ -554,7 +554,7 @@ class BuildInfo:
             return
 
         pattern = re.compile(
-            r"^(?:.\\[95m)?\[section:(?P<name>[^\]]*)\] (?P<boundary>start|end)? *"
+            r"^(?:.\[95m)?\[section:(?P<name>[^\]]*)\] (?P<boundary>start|end)? *"
             "(time=(?P<time>[0-9]*))? *"
             "(type=(?P<type>[a-z]*))? *"
             "(.*)"
@@ -571,6 +571,8 @@ class BuildInfo:
 
             m = pattern.match(line)
             if not m:
+                if "[section:" in line:
+                    logger.warn("'%s' not matched", line)
                 continue
 
             logger.debug("Section: %s" % line)
