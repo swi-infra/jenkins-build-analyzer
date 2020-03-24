@@ -27,6 +27,17 @@ class BuildSection:
         self.start = None
         self.end = None
 
+    def __str__(self):
+        info = self.name
+        if self.type:
+            info += " (%s)" % self.type
+        dur_s = self.duration / 1000
+        if dur_s < 60:
+            info += " %ds" % (dur_s)
+        else:
+            info += " %dmin" % (dur_s / 60)
+        return info
+
     @property
     def type(self):
         if self.__type:
@@ -44,10 +55,11 @@ class BuildSection:
 
         return self.end - self.start  # in us
 
+    @property
     def parents_cnt(self):
         cnt = 0
         if self.parent is not None:
-            cnt = 1 + self.parent.parents_cnt()
+            cnt = 1 + self.parent.parents_cnt
         return cnt
 
 
@@ -79,7 +91,7 @@ class BuildInfo:
         fetch_on_init=True,
         cache=None,
         fetch_sections=True,
-        upstream=None
+        upstream=None,
     ):
         self.fetcher = fetcher
         self.job_name = job_name
@@ -208,18 +220,17 @@ class BuildInfo:
 
         for cause_elmt in tree.iterfind("./action/cause"):
             cause_class = cause_elmt.get("_class")
-            if cause_class == 'hudson.model.Cause$UpstreamCause':
-                upstream_job = cause_elmt.findtext('upstreamProject')
-                upstream_build = cause_elmt.findtext('upstreamBuild')
+            if cause_class == "hudson.model.Cause$UpstreamCause":
+                upstream_job = cause_elmt.findtext("upstreamProject")
+                upstream_build = cause_elmt.findtext("upstreamBuild")
                 if upstream_job and upstream_build:
-                    self.upstream = self.fetcher.get_build(upstream_job, upstream_build, fetch_sections=False)
+                    self.upstream = self.fetcher.get_build(
+                        upstream_job, upstream_build, fetch=False, fetch_sections=False
+                    )
             elif cause_class == "hudson.model.Cause$UserIdCause":
-                user_id = cause_elmt.findtext('userId')
-                user_name = cause_elmt.findtext('userName')
-                self.user = {
-                    'user_id': user_id,
-                    'user_name': user_name
-                }
+                user_id = cause_elmt.findtext("userId")
+                user_name = cause_elmt.findtext("userName")
+                self.user = {"user_id": user_id, "user_name": user_name}
 
         self.__failure_causes = []
         for cause_elmt in tree.iterfind("./action/foundFailureCause"):
@@ -241,11 +252,13 @@ class BuildInfo:
         for param_elmt in tree.iterfind("./action/parameter"):
             name_elmt = param_elmt.find("name")
             value_elmt = param_elmt.find("value")
-            if name_elmt == None:
+            if name_elmt is None:
                 logger.warning("Missing name element for parameter %s" % param_elmt)
                 continue
-            if value_elmt == None:
-                logger.warning("Missing value element for parameter %s" % name_elmt.text)
+            if value_elmt is None:
+                logger.warning(
+                    "Missing value element for parameter %s" % name_elmt.text
+                )
                 continue
             param = {
                 "class_name": param_elmt.attrib["_class"],
@@ -353,7 +366,7 @@ class BuildInfo:
 
         if result == "FAILURE":
             for cause in self.failure_causes:
-                if ("retrigger" in cause["categories"]):
+                if "retrigger" in cause["categories"]:
                     result = "INFRA_FAILURE"
                     break
 
@@ -598,7 +611,9 @@ class BuildInfo:
                     current.end = time
                     current = current.parent
                 else:
-                    logger.warning("Noticed a end section while no section is in progress")
+                    logger.warning(
+                        "Noticed a end section while no section is in progress"
+                    )
             else:
                 raise Exception("Unknown boundary %s" % boundary)
 
@@ -643,13 +658,13 @@ class BuildInfoFetcher:
         if fetch_sections is None:
             fetch_sections = self.fetch_sections
         return self.info_class(
-                self,
-                job_name,
-                build_number,
-                fetch_on_init=False,
-                cache=self.cache,
-                fetch_sections=fetch_sections,
-            )
+            self,
+            job_name,
+            build_number,
+            fetch_on_init=False,
+            cache=self.cache,
+            fetch_sections=fetch_sections,
+        )
 
     def get_build(self, job_name, build_number, fetch=True, fetch_sections=None):
         build_id = "%s #%s" % (job_name, build_number)

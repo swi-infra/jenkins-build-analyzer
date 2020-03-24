@@ -43,6 +43,7 @@ STYLES = """
       rect.type_test    { fill: rgb(167,147,255); fill-opacity: 0.7; }
       rect.type_archive { fill: rgb(147,255,221); fill-opacity: 0.7; }
       rect.type_sca     { fill: rgb(147,201,181); fill-opacity: 0.7; }
+      rect.type_init    { fill: #97F2F3; fill-opacity: 0.7; }
 
       text       { font-family: Verdana, Helvetica; font-size: 14px; }
       text.left  { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: start; }
@@ -86,6 +87,17 @@ HTML_TMPL = """<!DOCTYPE html>
             margin: 2px;
             margin-left: 6px;
             border-left: 2px solid #eee;
+            font-family: monospace;
+        }
+        .sections {
+            padding: 4px;
+            padding-left: 6px;
+            background: rgba(50, 50, 50, .2);
+            border-radius: 3px;
+            margin: 2px;
+            margin-left: 6px;
+            border-left: 2px solid #eee;
+            font-family: monospace;
         }
     </style>
     %s
@@ -232,7 +244,7 @@ class SvgPrinter:
         if section.type:
             class_name = "type_%s" % section.type
 
-        section_index = section.parents_cnt()
+        section_index = section.parents_cnt
         if section_index >= 4:
             section_index = 4
 
@@ -481,6 +493,14 @@ class SvgPrinter:
                             '<p class="failure-cause">%s</p>'
                             % html.escape(cause["description"])
                         )
+
+            if len(build.sections) != 0:
+                tooltip_lines.append("<b>Sections:</b><br/>")
+                tooltip_lines.append('<div class="sections">')
+                for section in build.sections:
+                    padding = "&nbsp;" * section.parents_cnt * 2
+                    tooltip_lines.append("%s⊩ %s<br/>" % (padding, section))
+                tooltip_lines.append("</div>")
 
             tooltip = '<div class="tooltip" id="%s">%s</div>' % (
                 tooltip_id,
