@@ -498,7 +498,7 @@ class SvgPrinter:
                             % html.escape(cause["description"])
                         )
 
-            if len(build.sections) != 0:
+            if build.sections and len(build.sections) != 0:
                 tooltip_lines.append("<b>Sections:</b><br/>")
                 tooltip_lines.append('<div class="sections">')
                 for section in build.sections:
