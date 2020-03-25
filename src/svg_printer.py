@@ -231,7 +231,7 @@ class SvgPrinter:
 
             self.current_pos += self.minute_width
 
-    def __render_section(self, section, build_index, max_duration):
+    def __render_section(self, build, section, build_index):
         dwg = self.__dwg
 
         offset = (section.start - self.base_timestamp) / 1000 / 60
@@ -241,7 +241,16 @@ class SvgPrinter:
 
         duration = section.duration / 1000 / 60
         if not section.end:
-            duration = max_duration
+            if not section.parent:
+                if build.end:
+                    duration = (build.end - section.start) / 1000 / 60
+            else:
+                parent_section = section.parent
+                while parent_section is not None:
+                    if parent_section.end:
+                        duration = (parent_section.end - section.start) / 1000 / 60
+                        break
+                    parent_section = parent_section.parent
         duration_px = duration * self.minute_width
 
         class_name = "type"
@@ -351,18 +360,9 @@ class SvgPrinter:
             dwg.rect(insert=build_r["insert"], size=build_r["size"], class_=class_name)
         )
 
-        section_max_duration = duration
-        section_last_end = build.start
         if build.sections:
             for section in build.sections:
-                if section_last_end and not section.parent:
-                    section_max_duration -= (
-                        (section.start - section_last_end) / 1000 / 60
-                    )
-                self.__render_section(section, index, section_max_duration)
-                if section.end and not section.parent:
-                    section_max_duration -= section.duration / 1000 / 60
-                    section_last_end = section.end
+                self.__render_section(build, section, index)
 
         build_info = ""
         if build.stage:

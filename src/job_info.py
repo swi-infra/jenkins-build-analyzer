@@ -295,6 +295,12 @@ class BuildInfo:
         return self.__start
 
     @property
+    def end(self):
+        if self.start and self.duration:
+            return self.start + self.duration
+        return None
+
+    @property
     def queueing_duration(self):
         if not self.__queueing_duration:
             self.__fetch_info()
