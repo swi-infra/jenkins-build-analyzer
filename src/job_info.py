@@ -2,12 +2,30 @@ import urllib3
 import xml.etree.ElementTree as ET
 import re
 import logging
+from datetime import datetime, timedelta
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
 pool_manager = urllib3.PoolManager(timeout=30.0)
+
+
+def get_human_time(milliseconds):
+
+    d = datetime(1, 1, 1) + timedelta(milliseconds=int(milliseconds))
+    time = [d.day - 1, d.hour, d.minute, d.second + (milliseconds % 1000) / 1000.0]
+    time_suffix = ["d", "h", "m", "s"]
+
+    val = []
+    for i in range(len(time)):
+        if time[i] > 0:
+            if time_suffix[i] == "s":
+                s = "%.1f%s" % (time[i], time_suffix[i])
+            else:
+                s = "%d%s" % (time[i], time_suffix[i])
+            val.append(s)
+    return " ".join(val)
 
 
 class BuildNotFoundException(Exception):
@@ -31,11 +49,7 @@ class BuildSection:
         info = self.name
         if self.type:
             info += " (%s)" % self.type
-        dur_s = self.duration / 1000
-        if dur_s < 60:
-            info += " %ds" % (dur_s)
-        else:
-            info += " %dmin" % (dur_s / 60)
+        info += " %s" % get_human_time(self.duration)
         return info
 
     @property

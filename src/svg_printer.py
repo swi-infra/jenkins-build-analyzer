@@ -6,7 +6,7 @@ import cairosvg
 import base64
 import html
 
-from datetime import datetime, timedelta
+from .job_info import get_human_time
 
 logger = logging.getLogger(__name__)
 
@@ -272,22 +272,6 @@ class SvgPrinter:
             )
         )
 
-    def __get_time(self, milliseconds):
-
-        d = datetime(1, 1, 1) + timedelta(milliseconds=int(milliseconds))
-        time = [d.day - 1, d.hour, d.minute, d.second + (milliseconds % 1000) / 1000.0]
-        time_suffix = ["d", "h", "m", "s"]
-
-        val = []
-        for i in range(len(time)):
-            if time[i] > 0:
-                if time_suffix[i] == "s":
-                    s = "%.1f%s" % (time[i], time_suffix[i])
-                else:
-                    s = "%d%s" % (time[i], time_suffix[i])
-                val.append(s)
-        return " ".join(val)
-
     def __render_queue(self, build, build_index):
         dwg = self.__dwg
 
@@ -377,8 +361,8 @@ class SvgPrinter:
         )
 
         if self.show_time:
-            queue_time = self.__get_time(build.queueing_duration)
-            exec_time = self.__get_time(build.duration)
+            queue_time = get_human_time(build.queueing_duration)
+            exec_time = get_human_time(build.duration)
             build_time = "[queue: %s; build: %s]" % (queue_time, exec_time)
 
             dwg.add(
@@ -474,8 +458,8 @@ class SvgPrinter:
             )
             map_content.append(area)
 
-            queue_time = self.__get_time(build.queueing_duration)
-            exec_time = self.__get_time(build.duration)
+            queue_time = get_human_time(build.queueing_duration)
+            exec_time = get_human_time(build.duration)
             tooltip_lines = []
             tooltip_lines.append("<b>Queue Time:</b> %s<br/>" % queue_time)
             tooltip_lines.append("<b>Exec Time:</b> %s<br/>" % exec_time)
