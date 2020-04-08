@@ -2,7 +2,7 @@ import urllib3
 import xml.etree.ElementTree as ET
 import re
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
@@ -323,8 +323,13 @@ class BuildInfo:
 
     @property
     def duration(self):
-        if not self.__duration:
+        if self.__duration is None:
             self.__fetch_info()
+
+        if self.result == "IN_PROGRESS":
+            now_ts = int(datetime.now().replace(tzinfo=timezone.utc).timestamp() * 1000)
+            duration = now_ts - self.start
+            return duration
 
         return self.__duration
 
