@@ -618,7 +618,12 @@ class BuildInfo:
             boundary = m.group("boundary")
             name = m.group("name")
             section_type = m.group("type")
-            time = int(m.group("time")) * 1000
+            time = 0
+            if m.group("time"):
+                time = int(m.group("time")) * 1000
+            else:
+                logger.warn("No time in section '%s'", line)
+
             if boundary == "start":
                 # Start
                 new = BuildSection(name, section_type)
