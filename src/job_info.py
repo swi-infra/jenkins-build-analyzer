@@ -609,7 +609,11 @@ class BuildInfo:
 
             m = pattern.match(line)
             if not m:
-                if "[section:" in line:
+                if (
+                    "[section:" in line
+                    and "message" not in line
+                    and "echo -e" not in line
+                ):
                     logger.warn("'%s' not matched", line)
                 continue
 
