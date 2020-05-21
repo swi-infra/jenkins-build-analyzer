@@ -326,7 +326,7 @@ class SvgPrinter:
         elif build.result == "IN_PROGRESS":
             class_name = "in_progress"
 
-        if build.job_type == "pipeline" or build.job_type == "buildFlow":
+        if build.job_type in ["pipeline", "buildFlow", "matrixBuild", "matrixRun"]:
             class_name = "pipe_%s" % class_name
 
         x = self.margin + offset_px

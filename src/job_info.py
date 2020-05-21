@@ -437,11 +437,57 @@ class BuildInfo:
 
         return self._console_log
 
-    def create_sub_build(self, job_name, build_number, stage):
+    def create_sub_build(self, job_name, build_number, stage=""):
         sub_build = self.fetcher.get_build(job_name, build_number)
         sub_build.stage = stage
         sub_build.upstream = self
         return sub_build
+
+    def __parse_build_matrix_build_log(self):
+        for run in self.build_xml.findall("./run"):
+            build_number = run.find("./number").text
+            match = re.match(
+                ".*/job/(?P<job_name>[^/]*/(?P<variant>[^/]*))/.*",
+                run.find("./url").text,
+            )
+            stage = match["variant"]
+            job_name = match["job_name"]
+
+            # run includes all the builds, including previous ones, so we need to skip them
+            if int(build_number) != self.build_number:
+                logger.debug("Skipping matrix run %s #%s", stage, build_number)
+                continue
+
+            logger.debug("Matrix Sub-build: %s#%s %s" % (job_name, build_number, stage))
+
+            try:
+                sub_build = self.create_sub_build(job_name, build_number, stage)
+                self.__sub_builds.append(sub_build)
+
+            except BuildNotFoundException as e:
+                logger.error(e)
+
+    def __parse_build_matrix_run_log(self):
+        pattern = re.compile(r"(?P<job>.+) #(?P<bn>\d+) completed.")
+
+        for line in self.console_log.splitlines():
+
+            m = pattern.match(line)
+            if not m:
+                continue
+
+            logger.debug("Line: %s" % line)
+
+            job_name = m.group("job")
+            build_number = m.group("bn")
+            logger.debug("Sub-build: %s#%s" % (job_name, build_number))
+
+            try:
+                sub_build = self.create_sub_build(job_name, build_number)
+                self.__sub_builds.append(sub_build)
+
+            except BuildNotFoundException as e:
+                logger.error(e)
 
     def __parse_build_flow_log(self):
         pattern = re.compile(r"(?P<stage>) *Build (?P<job>.+) #(?P<bn>\d+) started")
@@ -569,7 +615,7 @@ class BuildInfo:
     def __fetch_sub_builds(self):
         self.__sub_builds = []
 
-        if self.job_type != "pipeline" and self.job_type != "buildFlow":
+        if self.job_type not in ["pipeline", "buildFlow", "matrixBuild", "matrixRun"]:
             return
 
         # Parse log as HTML
@@ -580,9 +626,15 @@ class BuildInfo:
         elif self.job_type == "buildFlow":
             self.__parse_build_flow_log()
 
+        # Get matrix builds
+        elif self.job_type == "matrixBuild":
+            self.__parse_build_matrix_build_log()
+        elif self.job_type == "matrixRun":
+            self.__parse_build_matrix_run_log()
+
         logger.info(
-            "%s#%s: %d sub-build(s)"
-            % (self.job_name, self.build_number, len(self.__sub_builds))
+            "%s#%s (%s): %d sub-build(s)"
+            % (self.job_name, self.build_number, self.job_type, len(self.__sub_builds))
         )
 
     def __determine_sections(self):
