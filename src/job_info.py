@@ -522,7 +522,7 @@ class BuildInfo:
                 "<html>{0}</html>".format(self.console_log), features="html.parser"
             )
         except ET.ParseError as e:
-            logger.error("Unable to parse HTML from '%s'" % self.build_url())
+            logger.error("Unable to parse HTML from '%s'", self.build_url())
             logger.error(e)
             return
 
@@ -546,7 +546,7 @@ class BuildInfo:
                 if "enclosingid" in span.attrs:
                     enclosing_id = span.attrs["enclosingid"]
                     if not nodes[enclosing_id]:
-                        logger.error("Node %s does not exist" % enclosing_id)
+                        logger.error("Node %s does not exist", enclosing_id)
                         continue
 
                     nodes[enclosing_id].content[node_id] = node
@@ -562,7 +562,7 @@ class BuildInfo:
             elif span_class.startswith("pipeline-node-"):
                 node_id = span_class.replace("pipeline-node-", "")
                 if node_id not in nodes:
-                    logger.warning("Node %s not found" % node_id)
+                    logger.warning("Node %s not found", node_id)
                     continue
 
                 node = nodes[node_id]
@@ -574,39 +574,38 @@ class BuildInfo:
                 if "Starting building:" not in span.text:
                     continue
 
-                m = None
+                match = None
                 for job_link in span.find_all("a"):
 
                     job_href = job_link.attrs["href"]
-                    logger.debug(job_href)
+                    logger.error(job_href)
 
-                    m = pattern.match(job_href)
-                    if m:
-                        break
+                    match = pattern.match(job_href)
+                    if match is None:
+                        continue
 
-                if m is None:
-                    logger.warning("No link found for %s" % span.text)
-                    continue
-
-                job_name = m.group("job")
-                build_number = m.group("bn")
-                if job_name and build_number:
-                    branch_info = ""
-                    if branch:
-                        branch_info = "[%s]" % branch
-                    logger.debug(
-                        "Sub-build: %s#%s %s" % (job_name, build_number, branch_info)
-                    )
-
-                    try:
-                        sub_build = self.create_sub_build(
-                            job_name, build_number, branch
+                    job_name = match.group("job")
+                    build_number = match.group("bn")
+                    if job_name and build_number:
+                        branch_info = ""
+                        if branch:
+                            branch_info = "[%s]" % branch
+                        logger.debug(
+                            "Sub-build: %s#%s %s", job_name, build_number, branch_info
                         )
-                        self.__sub_builds.append(sub_build)
 
-                    except BuildNotFoundException as e:
-                        logger.error(e)
-                        logger.warning(branch)
+                        try:
+                            sub_build = self.create_sub_build(
+                                job_name, build_number, branch
+                            )
+                            self.__sub_builds.append(sub_build)
+
+                        except BuildNotFoundException as ex:
+                            logger.error(ex)
+                            logger.warning(branch)
+
+                if match is None:
+                    logger.warning("No link found for %s", span.text)
 
             else:
                 logger.debug(span)
