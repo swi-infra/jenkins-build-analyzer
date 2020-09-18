@@ -13,7 +13,11 @@ pool_manager = urllib3.PoolManager(timeout=30.0)
 
 def get_human_time(milliseconds):
 
-    d = datetime(1, 1, 1) + timedelta(milliseconds=int(milliseconds))
+    try:
+        d = datetime(1, 1, 1) + timedelta(milliseconds=int(milliseconds))
+    except OverflowError as ex:
+        logger.error("Unable to convert %s ms to human time: %s", milliseconds, ex)
+        raise ex
     time = [d.day - 1, d.hour, d.minute, d.second + (milliseconds % 1000) / 1000.0]
     time_suffix = ["d", "h", "m", "s"]
 
@@ -66,6 +70,8 @@ class BuildSection:
     def duration(self):
         if not self.start or not self.end:
             return 0
+
+        assert self.end >= self.start
 
         return self.end - self.start  # in us
 
@@ -327,7 +333,8 @@ class BuildInfo:
             self.__fetch_info()
 
         if self.result == "IN_PROGRESS":
-            now_ts = int(datetime.now().replace(tzinfo=timezone.utc).timestamp() * 1000)
+            now_ts = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+            assert now_ts >= self.start
             duration = now_ts - self.start
             return duration
 

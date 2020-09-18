@@ -107,11 +107,13 @@ HTML_TMPL = """<!DOCTYPE html>
     %s
 </head>
 <body>
-    <img usemap="#map" class="map" src="%s" />
-    <map name="map">
+    <div result="%s">
+        <img usemap="#map" class="map" src="%s" />
+        <map name="map">
+            %s
+        </map>
         %s
-    </map>
-    %s
+    <div>
 </body>
 </html>"""
 
@@ -435,7 +437,7 @@ class SvgPrinter:
         title = "%s #%s" % (self.job_info.job_name, self.job_info.build_number)
 
         img_src = "data:image/svg+xml;base64,%s" % u"".join(
-            base64.encodestring(svg_content).decode("utf-8").splitlines()
+            base64.encodebytes(svg_content).decode("utf-8").splitlines()
         )
 
         map_content = []
@@ -507,14 +509,19 @@ class SvgPrinter:
             html_content = HTML_TMPL % (
                 title,
                 head_content,
+                self.result,
                 img_src,
                 "\n".join(map_content),
                 "\n".join(tooltips_content),
             )
             f_html.write(html_content)
 
+    @property
+    def result(self):
+        return next(iter(self.rect_builds))["build"].result
+
     def print(self, output):
-        logger.debug("Output to %s" % output)
+        logger.debug("Output to %s", output)
 
         if output.endswith(".svg"):
             self.print_svg(output)
