@@ -518,7 +518,8 @@ class SvgPrinter:
 
     @property
     def result(self):
-        return next(iter(self.rect_builds))["build"].result
+        key = next(iter(self.rect_builds))
+        return self.rect_builds[key]["build"].result
 
     def print(self, output):
         logger.debug("Output to %s", output)
