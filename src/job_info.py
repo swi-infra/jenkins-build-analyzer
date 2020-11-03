@@ -202,12 +202,15 @@ class BuildInfo:
         try:
             self.build_xml = ET.XML(self._raw_data)
         except ET.ParseError:
-            logger.error("Unable to parse XML at '%s'" % self.build_url())
+            logger.error("Unable to parse XML at '%s'", self.build_url())
             raise BuildNotFoundException(self)
 
         if self.cache and cache_key and not content_cached and self.is_done:
-            # Cache the content for 5h
-            self.cache.set(cache_key, self._raw_data, (5 * 60 * 60))
+            try:
+                # Cache the content for 5h
+                self.cache.set(cache_key, self._raw_data, (5 * 60 * 60))
+            except Exception:
+                logger.exception("Unable to set cache for build xml")
 
         return self.build_xml
 
@@ -439,8 +442,14 @@ class BuildInfo:
             and not content_cached
             and self.__result != "IN_PROGRESS"
         ):
-            # Cache the content for 5h
-            self.cache.set(cache_key, self._console_log, (5 * 60 * 60))
+            try:
+                # Cache the content for 5h
+                self.cache.set(cache_key, self._console_log, (5 * 60 * 60))
+            except Exception:
+                logger.exception(
+                    "Unable to set cache for console log (size=%s)",
+                    len(self._console_log),
+                )
 
         return self._console_log
 
