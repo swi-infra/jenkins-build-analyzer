@@ -125,29 +125,30 @@ class BuildInfo:
 
         self.stage = stage
 
-        self.__job_type = None
-        self.__queueing_duration = None
-        self.__start = None
-        self.__duration = None
-        self.__result = None
-        self.__node_name = None
+        self._info_fetched = False
+        self._job_type = None
+        self._queueing_duration = None
+        self._start = None
+        self._duration = None
+        self._result = None
+        self._node_name = None
 
         self.user = None
 
         self.upstream = upstream
-        self.__sub_builds = None
+        self._sub_builds = None
         self.__all_builds = None
 
         self._fetch_sections = fetch_sections
-        self.__sections = None
+        self._sections = None
 
-        self.__parameters = None
+        self._parameters = None
 
         self.build_xml = None
         self._raw_data = None
 
-        self.__description = None
-        self.__failure_causes = None
+        self._description = None
+        self._failure_causes = None
         self._console_log = None
 
         self.cache = cache
@@ -156,12 +157,15 @@ class BuildInfo:
             self.fetch()
 
     def fetch(self):
-        self.__fetch_info()
+        self._fetch_info()
+
+        if self._sub_builds is None:
+            self._fetch_sub_builds()
+
         if self._fetch_sections == "done":
             # Only fetch sections if the top build is done
             self._fetch_sections = self.is_done
-        self.__fetch_sub_builds()
-        if self._fetch_sections is True:
+        if self._sections is None and self._fetch_sections is True:
             self.__determine_sections()
 
     def build_url(self, extra=""):
@@ -179,10 +183,10 @@ class BuildInfo:
             raw_data = self.cache.get(cache_key)
 
         if raw_data:
-            logger.info("Content for '%s' already cached" % api_url)
+            logger.info("Content for '%s' already cached", api_url)
             return (raw_data, True, cache_key)
 
-        logger.info("Fetching info from '%s'" % api_url)
+        logger.info("Fetching info from '%s'", api_url)
 
         content = pool_manager.urlopen("GET", api_url)
         if content.status != 200:
@@ -216,30 +220,46 @@ class BuildInfo:
 
     # Retrieve the XML from Jenkins that contains some info about
     # the build.
-    def __fetch_info(self):
+    def _fetch_info(self):
+
+        if self._info_fetched:
+            logger.warning("Skipping fetch info as already fetched")
+            return
+        self._info_fetched = True
+
+        # Provide reasonable defaults in case the build is not found
+        self._failure_causes = []
+        self._start = 0
+        if self.upstream:
+            self._start = self.upstream.start
+        self._duration = 0
+        self._queueing_duration = 0
+        self._parameters = {}
+
+        logger.debug("Fetching object %s", self)
+
         tree = self.get_build_xml()
 
         job_type = tree.tag
         if job_type == "workflowRun":
-            self.__job_type = "pipeline"
+            self._job_type = "pipeline"
         elif job_type == "flowRun":
-            self.__job_type = "buildFlow"
+            self._job_type = "buildFlow"
         elif job_type == "freeStyleBuild":
-            self.__job_type = "freestyle"
+            self._job_type = "freestyle"
         else:
-            self.__job_type = job_type
+            self._job_type = job_type
 
-        self.__start = int(tree.find("./timestamp").text)
-        self.__duration = int(tree.find("./duration").text)
+        self._start = int(tree.find("./timestamp").text)
+        self._duration = int(tree.find("./duration").text)
 
-        self.__queueing_duration = 0
         if tree.find("./action/queuingDurationMillis") is not None:
-            self.__queueing_duration = int(
+            self._queueing_duration = int(
                 tree.find("./action/queuingDurationMillis").text
             )
 
         if tree.find("./description") is not None:
-            self.__description = tree.find("./description").text
+            self._description = tree.find("./description").text
 
         for cause_elmt in tree.iterfind("./action/cause"):
             cause_class = cause_elmt.get("_class")
@@ -255,7 +275,6 @@ class BuildInfo:
                 user_name = cause_elmt.findtext("userName")
                 self.user = {"user_id": user_id, "user_name": user_name}
 
-        self.__failure_causes = []
         for cause_elmt in tree.iterfind("./action/foundFailureCause"):
             cause = {}
             name = cause_elmt.find("name")
@@ -269,53 +288,50 @@ class BuildInfo:
             cause["categories"] = []
             for cat in cause_elmt.iter("category"):
                 cause["categories"].append(cat.text)
-            self.__failure_causes.append(cause)
+            self._failure_causes.append(cause)
 
-        self.__parameters = {}
         for param_elmt in tree.iterfind("./action/parameter"):
             name_elmt = param_elmt.find("name")
             value_elmt = param_elmt.find("value")
             if name_elmt is None:
-                logger.warning("Missing name element for parameter %s" % param_elmt)
+                logger.warning("Missing name element for parameter %s", param_elmt)
                 continue
             if value_elmt is None:
-                logger.warning(
-                    "Missing value element for parameter %s" % name_elmt.text
-                )
+                logger.warning("Missing value element for parameter %s", name_elmt.text)
                 continue
             param = {
                 "class_name": param_elmt.attrib["_class"],
                 "name": name_elmt.text,
                 "value": value_elmt.text,
             }
-            self.__parameters[param["name"]] = param
+            self._parameters[param["name"]] = param
 
         logger.debug(
             "%s#%s: %s %d %d %d %s"
             % (
                 self.job_name,
                 self.build_number,
-                self.__job_type,
-                self.__start,
-                self.__queueing_duration,
-                self.__duration,
-                self.__result,
+                self._job_type,
+                self._start,
+                self._queueing_duration,
+                self._duration,
+                self._result,
             )
         )
 
     @property
     def job_type(self):
-        if not self.__job_type:
-            self.__fetch_info()
+        if not self._job_type:
+            self._fetch_info()
 
-        return self.__job_type
+        return self._job_type
 
     @property
     def start(self):
-        if not self.__start:
-            self.__fetch_info()
+        if not self._start:
+            self._fetch_info()
 
-        return self.__start
+        return self._start
 
     @property
     def end(self):
@@ -325,15 +341,15 @@ class BuildInfo:
 
     @property
     def queueing_duration(self):
-        if not self.__queueing_duration:
-            self.__fetch_info()
+        if self._queueing_duration is None:
+            self._fetch_info()
 
-        return self.__queueing_duration
+        return self._queueing_duration
 
     @property
     def duration(self):
-        if self.__duration is None:
-            self.__fetch_info()
+        if self._duration is None:
+            self._fetch_info()
 
         if self.result == "IN_PROGRESS":
             now_ts = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
@@ -341,28 +357,31 @@ class BuildInfo:
             duration = now_ts - self.start
             return duration
 
-        return self.__duration
+        return self._duration
 
     @property
     def parameters(self):
-        if self.__parameters is None:
-            self.__fetch_info()
+        if self._parameters is None:
+            self._fetch_info()
 
-        return self.__parameters
+        return self._parameters
 
     @property
     def node_name(self):
-        if self.__node_name:
-            return self.__node_name
+        if self._node_name:
+            return self._node_name
 
         if not self.build_xml:
-            self.__fetch_info()
+            self._fetch_info()
+
+        if not self.build_xml:
+            return
 
         built_on = self.build_xml.find("./builtOn")
         if built_on is not None:
-            self.__node_name = built_on.text
+            self._node_name = built_on.text
 
-        return self.__node_name
+        return self._node_name
 
     @property
     def build_number(self):
@@ -370,7 +389,7 @@ class BuildInfo:
             return self._build_number
 
         if not self.build_xml:
-            self.__fetch_info()
+            self._fetch_info()
 
         self._build_number = int(self.build_xml.find("./number").text)
         return self._build_number
@@ -381,15 +400,17 @@ class BuildInfo:
 
     @property
     def result(self):
-        if self.__result:
-            return self.__result
+        if self._result:
+            return self._result
 
         if not self.build_xml:
-            self.__fetch_info()
+            self._fetch_info()
 
         # Determine result
         result = None
-        if (
+        if not self.build_xml:
+            result = "UNKNOWN"
+        elif (
             self.build_xml.find("./building") is not None
             and self.build_xml.find("./building").text == "true"
         ):
@@ -405,23 +426,23 @@ class BuildInfo:
                     result = "INFRA_FAILURE"
                     break
 
-        self.__result = result
+        self._result = result
 
-        return self.__result
+        return self._result
 
     @property
     def description(self):
-        if self.__description is None:
-            self.__fetch_info()
+        if self._description is None:
+            self._fetch_info()
 
-        return self.__description
+        return self._description
 
     @property
     def failure_causes(self):
-        if not self.__failure_causes:
-            self.__fetch_info()
+        if not self._failure_causes:
+            self._fetch_info()
 
-        return self.__failure_causes
+        return self._failure_causes
 
     @property
     def console_log(self):
@@ -440,7 +461,7 @@ class BuildInfo:
             self.cache
             and cache_key
             and not content_cached
-            and self.__result != "IN_PROGRESS"
+            and self._result != "IN_PROGRESS"
         ):
             try:
                 # Cache the content for 5h
@@ -454,7 +475,11 @@ class BuildInfo:
         return self._console_log
 
     def create_sub_build(self, job_name, build_number, stage=""):
-        sub_build = self.fetcher.get_build(job_name, build_number)
+        sub_build = self.fetcher.get_build(job_name, build_number, fetch=False)
+        try:
+            sub_build.fetch()
+        except BuildNotFoundException as ex:
+            logger.warning(ex)
         sub_build.stage = stage
         sub_build.upstream = self
         return sub_build
@@ -474,11 +499,11 @@ class BuildInfo:
                 logger.debug("Skipping matrix run %s #%s", stage, build_number)
                 continue
 
-            logger.debug("Matrix Sub-build: %s#%s %s" % (job_name, build_number, stage))
+            logger.debug("Matrix Sub-build: %s#%s %s", job_name, build_number, stage)
 
             try:
                 sub_build = self.create_sub_build(job_name, build_number, stage)
-                self.__sub_builds.append(sub_build)
+                self._sub_builds.append(sub_build)
 
             except BuildNotFoundException as e:
                 logger.error(e)
@@ -492,15 +517,15 @@ class BuildInfo:
             if not m:
                 continue
 
-            logger.debug("Line: %s" % line)
+            logger.debug("Line: %s", line)
 
             job_name = m.group("job")
             build_number = m.group("bn")
-            logger.debug("Sub-build: %s#%s" % (job_name, build_number))
+            logger.debug("Sub-build: %s#%s", job_name, build_number)
 
             try:
                 sub_build = self.create_sub_build(job_name, build_number)
-                self.__sub_builds.append(sub_build)
+                self._sub_builds.append(sub_build)
 
             except BuildNotFoundException as e:
                 logger.error(e)
@@ -514,7 +539,7 @@ class BuildInfo:
             if not m:
                 continue
 
-            logger.debug("Line: %s" % line)
+            logger.debug("Line: %s", line)
 
             job_name = m.group("job")
             build_number = m.group("bn")
@@ -522,11 +547,11 @@ class BuildInfo:
             stage_info = ""
             if stage:
                 stage_info = "[%s]" % stage
-            logger.debug("Sub-build: %s#%s %s" % (job_name, build_number, stage_info))
+            logger.debug("Sub-build: %s#%s %s", job_name, build_number, stage_info)
 
             try:
                 sub_build = self.create_sub_build(job_name, build_number, stage)
-                self.__sub_builds.append(sub_build)
+                self._sub_builds.append(sub_build)
 
             except BuildNotFoundException as e:
                 logger.error(e)
@@ -594,7 +619,6 @@ class BuildInfo:
                 for job_link in span.find_all("a"):
 
                     job_href = job_link.attrs["href"]
-                    logger.error(job_href)
 
                     match = pattern.match(job_href)
                     if match is None:
@@ -614,7 +638,7 @@ class BuildInfo:
                             sub_build = self.create_sub_build(
                                 job_name, build_number, branch
                             )
-                            self.__sub_builds.append(sub_build)
+                            self._sub_builds.append(sub_build)
 
                         except BuildNotFoundException as ex:
                             logger.error(ex)
@@ -627,8 +651,8 @@ class BuildInfo:
                 logger.debug(span)
 
     # Retrieve the 'sub-builds', which are launched from this job.
-    def __fetch_sub_builds(self):
-        self.__sub_builds = []
+    def _fetch_sub_builds(self):
+        self._sub_builds = []
 
         if self.job_type not in ["pipeline", "buildFlow", "matrixBuild", "matrixRun"]:
             return
@@ -648,12 +672,15 @@ class BuildInfo:
             self.__parse_build_matrix_run_log()
 
         logger.info(
-            "%s#%s (%s): %d sub-build(s)"
-            % (self.job_name, self.build_number, self.job_type, len(self.__sub_builds))
+            "%s#%s (%s): %d sub-build(s)",
+            self.job_name,
+            self.build_number,
+            self.job_type,
+            len(self._sub_builds),
         )
 
     def __determine_sections(self):
-        self.__sections = []
+        self._sections = []
 
         if self.job_type != "freestyle":
             return
@@ -681,10 +708,10 @@ class BuildInfo:
                     and "message" not in line
                     and "echo -e" not in line
                 ):
-                    logger.warn("'%s' not matched", line)
+                    logger.warning("'%s' not matched", line)
                 continue
 
-            logger.debug("Section: %s" % line)
+            logger.debug("Section: %s", line)
 
             boundary = m.group("boundary")
             name = m.group("name")
@@ -693,12 +720,12 @@ class BuildInfo:
             if m.group("time"):
                 time = int(m.group("time")) * 1000
             else:
-                logger.warn("No time in section '%s'", line)
+                logger.warning("No time in section '%s'", line)
 
             if boundary == "start":
                 # Start
                 new = BuildSection(name, section_type)
-                self.__sections.append(new)
+                self._sections.append(new)
 
                 if current:
                     new.parent = current
@@ -718,17 +745,20 @@ class BuildInfo:
             else:
                 raise Exception("Unknown boundary %s" % boundary)
 
-        for section in self.__sections:
+        for section in self._sections:
             logger.debug(
-                "Section: %s %s %s" % (section.name, section.type, section.duration)
+                "Section: %s %s %s", section.name, section.type, section.duration
             )
 
     @property
     def sub_builds(self):
-        if self.__sub_builds is None:
-            self.__fetch_sub_builds()
+        if self._sub_builds is None:
+            try:
+                self._fetch_sub_builds()
+            except BuildNotFoundException:
+                pass
 
-        return self.__sub_builds
+        return self._sub_builds
 
     @property
     def all_builds(self):
@@ -744,7 +774,7 @@ class BuildInfo:
 
     @property
     def sections(self):
-        return self.__sections
+        return self._sections
 
 
 class BuildInfoFetcher:
@@ -770,9 +800,10 @@ class BuildInfoFetcher:
     def get_build(self, job_name, build_number, fetch=True, fetch_sections=None):
         build_id = "%s #%s" % (job_name, build_number)
         if build_id not in self.builds:
-            self.builds[build_id] = self._create_build(job_name, build_number)
+            build = self._create_build(job_name, build_number)
             if fetch:
-                self.builds[build_id].fetch()
+                build.fetch()
+            self.builds[build_id] = build
 
         return self.builds[build_id]
 

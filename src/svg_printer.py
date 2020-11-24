@@ -163,23 +163,27 @@ class SvgPrinter:
         self.build_height = 30
         self.section_height = 2
         self.minute_width = 10
+        self.min_width = 5
+        self.base_timestamp = None
 
         self.rect_builds = {}
+        self.box_height = None
+        self.box_width = None
+        self.total_height = None
+        self.total_width = None
 
         self.__dwg = None
+        self.current_pos = None
 
-    def __determine_sizes(self):
+        self.all_builds = self.job_info.all_builds
+        self.build_result = self.job_info.result
+        self.duration = self.job_info.duration
+        self.max_duration = 0
 
-        self.base_timestamp = self.job_info.start
-
-        # Height based on number of builds to show
-        self.box_height = self.build_height * len(self.job_info.all_builds)
-        self.total_height = 2 * self.margin + self.box_height
-
-        # Width based on duration
-        self.max_duration = self.job_info.duration
-        if self.job_info.result == "IN_PROGRESS":
-            for build in self.job_info.all_builds:
+    def determine_max_duration(self):
+        self.max_duration = self.duration
+        if self.build_result == "IN_PROGRESS":
+            for build in self.all_builds:
                 self.max_duration = max(
                     self.max_duration,
                     build.start + build.duration - self.base_timestamp,
@@ -189,10 +193,24 @@ class SvgPrinter:
             math.ceil(self.max_duration / 1000 / 60 / 5) * 5
         )  # in minutes, rounded up
 
+    def __determine_sizes(self):
+
+        self.base_timestamp = self.job_info.start
+
+        # Height based on number of builds to show
+
+        self.box_height = self.build_height * len(self.all_builds)
+        self.total_height = 2 * self.margin + self.box_height
+
+        # Width based on duration
+        self.determine_max_duration()
+
         self.box_width = self.minute_width * self.max_duration
+        if self.max_duration == 0:
+            self.box_width = self.min_width
         self.total_width = 2 * self.margin + self.box_width + self.extra_width
 
-        logger.debug("Total: %d x %d" % (self.total_height, self.total_width))
+        logger.debug("Total: %d x %d", self.total_height, self.total_width)
 
     def __render_grid(self):
         dwg = self.__dwg
@@ -313,6 +331,8 @@ class SvgPrinter:
         if build.result == "IN_PROGRESS":
             duration = self.max_duration - offset
         duration_px = duration * self.minute_width
+        if duration_px < self.min_width:
+            duration_px = self.min_width
 
         class_name = "other"
         if build.result == "SUCCESS":
@@ -377,7 +397,7 @@ class SvgPrinter:
 
     def __render_builds(self):
         current_idx = 0
-        for build in self.job_info.all_builds:
+        for build in self.all_builds:
             self.__render_build(build, current_idx)
             current_idx += 1
 
