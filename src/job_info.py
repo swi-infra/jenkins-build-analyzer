@@ -156,8 +156,8 @@ class BuildInfo:
         if fetch_on_init:
             self.fetch()
 
-    def fetch(self):
-        self._fetch_info()
+    def fetch(self, fatal=False):
+        self._fetch_info(fatal)
 
         if self._sub_builds is None:
             self._fetch_sub_builds()
@@ -220,7 +220,7 @@ class BuildInfo:
 
     # Retrieve the XML from Jenkins that contains some info about
     # the build.
-    def _fetch_info(self):
+    def _fetch_info(self, fatal=False):
 
         if self._info_fetched:
             logger.warning("Skipping fetch info as already fetched")
@@ -797,15 +797,17 @@ class BuildInfoFetcher:
             fetch_sections=fetch_sections,
         )
 
-    def get_build(self, job_name, build_number, fetch=True, fetch_sections=None):
+    def get_build(
+        self, job_name, build_number, fetch=True, fetch_sections=None, fatal=False
+    ):
         build_id = "%s #%s" % (job_name, build_number)
         if build_id not in self.builds:
             build = self._create_build(job_name, build_number)
             if fetch:
-                build.fetch()
+                build.fetch(fatal=fatal)
             self.builds[build_id] = build
 
         return self.builds[build_id]
 
-    def fetch(self, job_name, build_number):
-        return self.get_build(job_name, build_number)
+    def fetch(self, job_name, build_number, fatal=False):
+        return self.get_build(job_name, build_number, fatal=fatal)
