@@ -324,7 +324,9 @@ class SvgPrinter:
 
         self.__render_queue(build, index)
 
-        offset = (build.start - self.base_timestamp) / 1000 / 60
+        offset = 0
+        if build.start:
+            offset = (build.start - self.base_timestamp) / 1000 / 60
         offset_px = offset * self.minute_width
 
         duration = build.duration / 1000 / 60
