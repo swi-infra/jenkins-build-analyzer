@@ -296,7 +296,7 @@ class BuildInfo:
                     if desc is not None:
                         cause["description"] = desc.strip()
                     cause["categories"] = []
-                    for cat in cause_elmt["categories"]:
+                    for cat in cause_elmt.get("categories", []):
                         cause["categories"].append(cat)
                     self._failure_causes.append(cause)
             elif action_class == "hudson.model.ParametersAction":
@@ -307,7 +307,6 @@ class BuildInfo:
                         value_elmt = str(value_elmt).lower()
                     else:
                         value_elmt = str(value_elmt)
-                    logger.debug("%s=%s", name_elmt, value_elmt)
                     if name_elmt is None:
                         logger.warning(
                             "Missing name element for parameter %s", param_elmt
