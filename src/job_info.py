@@ -1,5 +1,6 @@
 import urllib3
 import xml.etree.ElementTree as ET
+import json
 import re
 import logging
 from datetime import datetime, timedelta, timezone
@@ -147,7 +148,7 @@ class BuildInfo:
 
         self._parameters = None
 
-        self.build_xml = None
+        self.build_json = None
         self._raw_data = None
 
         self._description = None
@@ -199,17 +200,18 @@ class BuildInfo:
 
         return (raw_data, False, cache_key)
 
-    def get_build_xml(self):
-        if self.build_xml:
-            return self.build_xml
+    def get_build_json(self):
+        if self.build_json:
+            return self.build_json
 
         self._raw_data, content_cached, cache_key = self.__fetch_build_data(
-            "api/xml?depth=3"
+            "api/json?depth=3"
         )
         try:
-            self.build_xml = ET.XML(self._raw_data)
-        except ET.ParseError:
-            logger.error("Unable to parse XML at '%s'", self.build_url())
+            self.build_json = json.loads(self._raw_data)
+        except json.decoder.JSONDecodeError as ex:
+            logger.error("Unable to parse JSON at '%s'", self.build_url())
+            logger.error(ex)
             raise BuildNotFoundException(self)
 
         if self.cache and cache_key and not content_cached and self.is_done:
@@ -219,7 +221,7 @@ class BuildInfo:
             except Exception:
                 logger.exception("Unable to set cache for build xml")
 
-        return self.build_xml
+        return self.build_json
 
     # Retrieve the XML from Jenkins that contains some info about
     # the build.
@@ -241,73 +243,87 @@ class BuildInfo:
 
         logger.debug("Fetching object %s", self)
 
-        tree = self.get_build_xml()
+        tree = self.get_build_json()
 
-        job_type = tree.tag
-        if job_type == "workflowRun":
+        job_type = tree["_class"]
+        if job_type == "org.jenkinsci.plugins.workflow.job.WorkflowRun":
             self._job_type = "pipeline"
-        elif job_type == "flowRun":
-            self._job_type = "buildFlow"
-        elif job_type == "freeStyleBuild":
+        elif job_type == "hudson.model.FreeStyleBuild":
             self._job_type = "freestyle"
         else:
             self._job_type = job_type
 
-        self._start = int(tree.find("./timestamp").text)
-        self._duration = int(tree.find("./duration").text)
+        self._start = int(tree["timestamp"])
+        self._duration = int(tree["duration"])
 
-        if tree.find("./action/queuingDurationMillis") is not None:
-            self._queueing_duration = int(
-                tree.find("./action/queuingDurationMillis").text
-            )
+        self._description = tree.get("description")
 
-        if tree.find("./description") is not None:
-            self._description = tree.find("./description").text
-
-        for cause_elmt in tree.iterfind("./action/cause"):
-            cause_class = cause_elmt.get("_class")
-            if cause_class == "hudson.model.Cause$UpstreamCause":
-                upstream_job = cause_elmt.findtext("upstreamProject")
-                upstream_build = cause_elmt.findtext("upstreamBuild")
-                if upstream_job and upstream_build:
-                    self.upstream = self.fetcher.get_build(
-                        upstream_job, upstream_build, fetch=False, fetch_sections=False
-                    )
-            elif cause_class == "hudson.model.Cause$UserIdCause":
-                user_id = cause_elmt.findtext("userId")
-                user_name = cause_elmt.findtext("userName")
-                self.user = {"user_id": user_id, "user_name": user_name}
-
-        for cause_elmt in tree.iterfind("./action/foundFailureCause"):
-            cause = {}
-            name = cause_elmt.find("name")
-            if name is None:
+        for action in tree.get("actions", []):
+            action_class = action.get("_class")
+            if not action_class:
                 continue
+            if action_class == "jenkins.metrics.impl.TimeInQueueAction":
+                self._queueing_duration = int(action["queuingDurationMillis"])
+            elif action_class == "hudson.model.Cause":
+                for cause_elmt in action["causes"]:
+                    cause_class = cause_elmt.get("_class")
+                    if cause_class == "hudson.model.Cause$UpstreamCause":
+                        upstream_job = cause_elmt["upstreamProject"]
+                        upstream_build = cause_elmt["upstreamBuild"]
+                        if upstream_job and upstream_build:
+                            self.upstream = self.fetcher.get_build(
+                                upstream_job,
+                                upstream_build,
+                                fetch=False,
+                                fetch_sections=False,
+                            )
+                    elif cause_class == "hudson.model.Cause$UserIdCause":
+                        user_id = cause_elmt["userId"]
+                        user_name = cause_elmt["userName"]
+                        self.user = {"user_id": user_id, "user_name": user_name}
+            elif (
+                action_class
+                == "com.sonyericsson.jenkins.plugins.bfa.model.FailureCauseBuildAction"
+            ):
+                for cause_elmt in action["foundFailureCauses"]:
+                    cause = {}
+                    name = cause_elmt.get("name")
+                    if name is None:
+                        continue
 
-            cause["name"] = name.text
-            desc = cause_elmt.find("description")
-            if desc is not None:
-                cause["description"] = desc.text.strip()
-            cause["categories"] = []
-            for cat in cause_elmt.iter("category"):
-                cause["categories"].append(cat.text)
-            self._failure_causes.append(cause)
-
-        for param_elmt in tree.iterfind("./action/parameter"):
-            name_elmt = param_elmt.find("name")
-            value_elmt = param_elmt.find("value")
-            if name_elmt is None:
-                logger.warning("Missing name element for parameter %s", param_elmt)
-                continue
-            if value_elmt is None:
-                logger.warning("Missing value element for parameter %s", name_elmt.text)
-                continue
-            param = {
-                "class_name": param_elmt.attrib["_class"],
-                "name": name_elmt.text,
-                "value": value_elmt.text,
-            }
-            self._parameters[param["name"]] = param
+                    cause["name"] = name
+                    desc = cause_elmt.get("description")
+                    if desc is not None:
+                        cause["description"] = desc.strip()
+                    cause["categories"] = []
+                    for cat in cause_elmt["categories"]:
+                        cause["categories"].append(cat)
+                    self._failure_causes.append(cause)
+            elif action_class == "hudson.model.ParametersAction":
+                for param_elmt in action["parameters"]:
+                    name_elmt = param_elmt.get("name")
+                    value_elmt = param_elmt.get("value")
+                    if isinstance(value_elmt, bool):
+                        value_elmt = str(value_elmt).lower()
+                    else:
+                        value_elmt = str(value_elmt)
+                    logger.debug("%s=%s", name_elmt, value_elmt)
+                    if name_elmt is None:
+                        logger.warning(
+                            "Missing name element for parameter %s", param_elmt
+                        )
+                        continue
+                    if value_elmt is None:
+                        logger.warning(
+                            "Missing value element for parameter %s", name_elmt
+                        )
+                        continue
+                    param = {
+                        "class_name": param_elmt["_class"],
+                        "name": name_elmt,
+                        "value": value_elmt,
+                    }
+                    self._parameters[param["name"]] = param
 
         logger.debug(
             "%s#%s: %s %d %d %d %s"
@@ -374,15 +390,13 @@ class BuildInfo:
         if self._node_name:
             return self._node_name
 
-        if not self.build_xml:
+        if not self.build_json:
             self._fetch_info()
 
-        if not self.build_xml:
+        if not self.build_json:
             return
 
-        built_on = self.build_xml.find("./builtOn")
-        if built_on is not None:
-            self._node_name = built_on.text
+        self._node_name = self.build_json.get("builtOn")
 
         return self._node_name
 
@@ -391,10 +405,10 @@ class BuildInfo:
         if self._build_number is not None:
             return self._build_number
 
-        if not self.build_xml:
+        if not self.build_json:
             self._fetch_info()
 
-        self._build_number = int(self.build_xml.find("./number").text)
+        self._build_number = int(self.build_json["number"])
         return self._build_number
 
     @property
@@ -406,20 +420,17 @@ class BuildInfo:
         if self._result:
             return self._result
 
-        if not self.build_xml:
+        if not self.build_json:
             self._fetch_info()
 
         # Determine result
         result = None
-        if not self.build_xml:
+        if not self.build_json:
             result = "UNKNOWN"
-        elif (
-            self.build_xml.find("./building") is not None
-            and self.build_xml.find("./building").text == "true"
-        ):
+        elif self.build_json.get("building"):
             result = "IN_PROGRESS"
-        elif self.build_xml.find("./result") is not None:
-            result = self.build_xml.find("./result").text
+        elif self.build_json.get("result") is not None:
+            result = self.build_json.get("result")
         else:
             result = "UNKNOWN"
 
@@ -486,78 +497,6 @@ class BuildInfo:
         except BuildNotFoundException as ex:
             logger.warning(ex)
         return sub_build
-
-    def __parse_build_matrix_build_log(self):
-        for run in self.build_xml.findall("./run"):
-            build_number = run.find("./number").text
-            match = re.match(
-                ".*/job/(?P<job_name>[^/]*/(?P<variant>[^/]*))/.*",
-                run.find("./url").text,
-            )
-            stage = match["variant"]
-            job_name = match["job_name"]
-
-            # run includes all the builds, including previous ones, so we need to skip them
-            if int(build_number) != self.build_number:
-                logger.debug("Skipping matrix run %s #%s", stage, build_number)
-                continue
-
-            logger.debug("Matrix Sub-build: %s#%s %s", job_name, build_number, stage)
-
-            try:
-                sub_build = self.create_sub_build(job_name, build_number, stage)
-                self._sub_builds.append(sub_build)
-
-            except BuildNotFoundException as e:
-                logger.error(e)
-
-    def __parse_build_matrix_run_log(self):
-        pattern = re.compile(r"(?P<job>.+) #(?P<bn>\d+) completed.")
-
-        for line in self.console_log.splitlines():
-
-            m = pattern.match(line)
-            if not m:
-                continue
-
-            logger.debug("Line: %s", line)
-
-            job_name = m.group("job")
-            build_number = m.group("bn")
-            logger.debug("Sub-build: %s#%s", job_name, build_number)
-
-            try:
-                sub_build = self.create_sub_build(job_name, build_number)
-                self._sub_builds.append(sub_build)
-
-            except BuildNotFoundException as e:
-                logger.error(e)
-
-    def __parse_build_flow_log(self):
-        pattern = re.compile(r"(?P<stage>) *Build (?P<job>.+) #(?P<bn>\d+) started")
-
-        for line in self.console_log.splitlines():
-
-            m = pattern.match(line)
-            if not m:
-                continue
-
-            logger.debug("Line: %s", line)
-
-            job_name = m.group("job")
-            build_number = m.group("bn")
-            stage = m.group("stage")
-            stage_info = ""
-            if stage:
-                stage_info = "[%s]" % stage
-            logger.debug("Sub-build: %s#%s %s", job_name, build_number, stage_info)
-
-            try:
-                sub_build = self.create_sub_build(job_name, build_number, stage)
-                self._sub_builds.append(sub_build)
-
-            except BuildNotFoundException as e:
-                logger.error(e)
 
     def __parse_pipeline_log(self):
 
@@ -657,22 +596,12 @@ class BuildInfo:
     def _fetch_sub_builds(self):
         self._sub_builds = []
 
-        if self.job_type not in ["pipeline", "buildFlow", "matrixBuild", "matrixRun"]:
+        if self.job_type not in ["pipeline"]:
             return
 
         # Parse log as HTML
         if self.job_type == "pipeline":
             self.__parse_pipeline_log()
-
-        # Parse log
-        elif self.job_type == "buildFlow":
-            self.__parse_build_flow_log()
-
-        # Get matrix builds
-        elif self.job_type == "matrixBuild":
-            self.__parse_build_matrix_build_log()
-        elif self.job_type == "matrixRun":
-            self.__parse_build_matrix_run_log()
 
         logger.info(
             "%s#%s (%s): %d sub-build(s)",
