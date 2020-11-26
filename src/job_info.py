@@ -13,6 +13,9 @@ pool_manager = urllib3.PoolManager(timeout=30.0)
 
 def get_human_time(milliseconds):
 
+    if milliseconds is None:
+        milliseconds = 0
+
     try:
         d = datetime(1, 1, 1) + timedelta(milliseconds=int(milliseconds))
     except OverflowError as ex:
@@ -476,12 +479,12 @@ class BuildInfo:
 
     def create_sub_build(self, job_name, build_number, stage=""):
         sub_build = self.fetcher.get_build(job_name, build_number, fetch=False)
+        sub_build.stage = stage
+        sub_build.upstream = self
         try:
             sub_build.fetch()
         except BuildNotFoundException as ex:
             logger.warning(ex)
-        sub_build.stage = stage
-        sub_build.upstream = self
         return sub_build
 
     def __parse_build_matrix_build_log(self):

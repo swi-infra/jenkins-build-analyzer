@@ -295,7 +295,7 @@ class SvgPrinter:
     def __render_queue(self, build, build_index):
         dwg = self.__dwg
 
-        if build.queueing_duration == 0:
+        if not build.queueing_duration:
             return
 
         offset = (
