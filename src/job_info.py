@@ -161,6 +161,8 @@ class BuildInfo:
 
         self.cache = cache
 
+        self.lane_index = None
+
         if fetch_on_init:
             self.fetch()
 

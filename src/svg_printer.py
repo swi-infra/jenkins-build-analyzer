@@ -338,9 +338,12 @@ class SvgPrinter:
                 )
             )
 
-    def __determine_index(self, index, boundary_box, x):
+    def __determine_index(self, build, index, boundary_box, x):
 
-        index = self.__determine_next_lane(index, x)
+        if build.lane_index is not None:
+            index = build.lane_index
+        else:
+            index = self.__determine_next_lane(index, x)
         if index not in self.lanes:
             self.lanes[index] = []
         self.lanes[index].append(boundary_box)
@@ -367,7 +370,7 @@ class SvgPrinter:
 
         x = self.margin + offset_px
 
-        build_index = self.__determine_index(build_index, boundary_box, x)
+        build_index = self.__determine_index(build, build_index, boundary_box, x)
 
         y = self.margin + build_index * self.build_height
 
@@ -400,7 +403,7 @@ class SvgPrinter:
 
         queue_index = self.__render_queue(build, index, boundary_box, render)
         if queue_index is None:
-            index = self.__determine_index(index, boundary_box, x)
+            index = self.__determine_index(build, index, boundary_box, x)
         else:
             index = queue_index
 
@@ -527,6 +530,8 @@ class SvgPrinter:
         self.boundary_boxes = {}
 
         def sort_build(build):
+            if build.lane_index is not None:
+                return build.lane_index
             return build.start
 
         all_builds = self.all_builds
