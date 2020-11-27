@@ -20,13 +20,13 @@ STYLES = """
 
       rect.queue        { fill: rgb(148,111,97); fill-opacity: 0.3; }
 
-      rect.aborted       { fill: rgb(190,200,183); fill-opacity: 0.7; }
-      rect.success       { fill: rgb(170,255,170); fill-opacity: 0.7; }
-      rect.infra_failure { fill: rgb(249,170,255); fill-opacity: 0.7; }
-      rect.failure       { fill: rgb(255,170,170); fill-opacity: 0.7; }
-      rect.unstable      { fill: rgb(255,204,170); fill-opacity: 0.7; }
-      rect.other         { fill: rgb(204,204,204); fill-opacity: 0.7; }
-      rect.in_progress   { fill: rgb(135,205,222); fill-opacity: 0.7; }
+      rect.aborted       { fill: rgb(190,200,183); fill-opacity: 0.7; stroke: rgb(190,200,183); stroke-width: 2; stroke-opacity: 1.0; }
+      rect.success       { fill: rgb(170,255,170); fill-opacity: 0.7; stroke: rgb(170,255,170); stroke-width: 2; stroke-opacity: 1.0; }
+      rect.infra_failure { fill: rgb(249,170,255); fill-opacity: 0.7; stroke: rgb(249,170,255); stroke-width: 2; stroke-opacity: 1.0; }
+      rect.failure       { fill: rgb(255,170,170); fill-opacity: 0.7; stroke: rgb(255,170,170); stroke-width: 2; stroke-opacity: 1.0; }
+      rect.unstable      { fill: rgb(255,204,170); fill-opacity: 0.7; stroke: rgb(255,204,170); stroke-width: 2; stroke-opacity: 1.0; }
+      rect.other         { fill: rgb(204,204,204); fill-opacity: 0.7; stroke: rgb(204,204,204); stroke-width: 2; stroke-opacity: 1.0; }
+      rect.in_progress   { fill: rgb(135,205,222); fill-opacity: 0.7; stroke: rgb(135,205,222); stroke-width: 2; stroke-opacity: 1.0; }
 
       rect.pipe_aborted      { stroke: rgb(190,200,183); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(190,200,183); fill-opacity: 0.3; }
       rect.pipe_success      { stroke: rgb(170,255,170); stroke-width: 5; stroke-opacity: 0.7; fill: rgb(170,255,170); fill-opacity: 0.3; }
@@ -202,7 +202,9 @@ class SvgPrinter:
         self.extra_width = 200
 
         # Options
-        self.show_time = True
+        self.show_build_name = True
+        self.show_queue = True
+        self.show_time = False
         self.show_infobox = True
 
         self.build_padding = 5
@@ -348,6 +350,8 @@ class SvgPrinter:
     def __render_queue(self, build, build_index, boundary_box, render):
         dwg = self.__dwg
 
+        if not self.show_queue:
+            return None
         if build.queueing_duration is None:
             return None
 
@@ -446,21 +450,22 @@ class SvgPrinter:
             for section in build.sections:
                 self.__render_section(build, section, index, boundary_box, render)
 
-        build_info = ""
-        if build.stage:
-            build_info = "[%s] " % build.stage
-        build_info += build_id
+        if self.show_build_name:
+            build_info = ""
+            if build.stage:
+                build_info = "[%s] " % build.stage
+            build_info += build_id
 
-        text_pos = (x + 5, y + self.build_height - self.build_padding - 8)
-        boundary_box.add_text(build_info, insert=text_pos, class_="min")
-        if render:
-            dwg.add(
-                dwg.text(
-                    build_info,
-                    insert=text_pos,
-                    class_="min",
+            text_pos = (x + 5, y + self.build_height - self.build_padding - 8)
+            boundary_box.add_text(build_info, insert=text_pos, class_="min")
+            if render:
+                dwg.add(
+                    dwg.text(
+                        build_info,
+                        insert=text_pos,
+                        class_="min",
+                    )
                 )
-            )
 
         if self.show_time:
             queue_time = get_human_time(build.queueing_duration)
@@ -578,9 +583,6 @@ class SvgPrinter:
 
     def print_html(self, output):
 
-        # Configure rendering
-        self.show_time = False
-
         # First print as svg in a temporary file
         svg_content = None
         with self.print_svg_to_tmp() as f_svg:
@@ -615,6 +617,8 @@ class SvgPrinter:
             queue_time = get_human_time(build.queueing_duration)
             exec_time = get_human_time(build.duration)
             tooltip_lines = []
+            if not self.show_build_name:
+                tooltip_lines.append("<b>Build:</b> %s<br/>" % build)
             tooltip_lines.append("<b>Queue Time:</b> %s<br/>" % queue_time)
             tooltip_lines.append("<b>Exec Time:</b> %s<br/>" % exec_time)
             tooltip_lines.append("<b>Result:</b> %s<br/>" % build.result)
