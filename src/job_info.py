@@ -116,8 +116,10 @@ class BuildInfo:
         cache=None,
         fetch_sections=True,
         upstream=None,
+        virtual=False,
     ):
         self.fetcher = fetcher
+        self.virtual = virtual
         self.job_name = job_name
 
         self._build_number = None
@@ -126,6 +128,8 @@ class BuildInfo:
             self._build_number = int(build_number)
         except ValueError:
             pass
+
+        self._build_url = None
 
         self.stage = stage
 
@@ -173,10 +177,15 @@ class BuildInfo:
             self.__determine_sections()
 
     def build_url(self, extra=""):
+        if self._build_url:
+            return urljoin(self._build_url, extra)
         return urljoin(
             self.fetcher.url,
             "/".join(["job", self.job_name, self.build_number_str, extra]),
         )
+
+    def set_build_url(self, value):
+        self._build_url = value
 
     def __fetch_build_data(self, extra="", encoding="ISO-8859-1"):
         raw_data = None
@@ -241,6 +250,9 @@ class BuildInfo:
         self._queueing_duration = 0
         self._parameters = {}
 
+        if self.virtual:
+            return
+
         logger.debug("Fetching object %s", self)
 
         tree = self.get_build_json()
@@ -296,8 +308,10 @@ class BuildInfo:
                     if desc is not None:
                         cause["description"] = desc.strip()
                     cause["categories"] = []
-                    for cat in cause_elmt.get("categories", []):
-                        cause["categories"].append(cat)
+                    categories = cause_elmt.get("categories")
+                    if categories:
+                        for cat in categories:
+                            cause["categories"].append(cat)
                     self._failure_causes.append(cause)
             elif action_class == "hudson.model.ParametersAction":
                 for param_elmt in action["parameters"]:
@@ -344,6 +358,10 @@ class BuildInfo:
 
         return self._job_type
 
+    @job_type.setter
+    def job_type(self, value):
+        self._job_type = value
+
     @property
     def start(self):
         if not self._start:
@@ -351,11 +369,20 @@ class BuildInfo:
 
         return self._start
 
+    @start.setter
+    def start(self, value):
+        self._start = value
+
     @property
     def end(self):
         if self.start and self.duration:
             return self.start + self.duration
         return None
+
+    @end.setter
+    def end(self, value):
+        if self._start:
+            self._duration = value - self.start
 
     @property
     def queueing_duration(self):
@@ -363,6 +390,10 @@ class BuildInfo:
             self._fetch_info()
 
         return self._queueing_duration
+
+    @queueing_duration.setter
+    def queueing_duration(self, value):
+        self._queueing_duration = value
 
     @property
     def duration(self):
@@ -376,6 +407,10 @@ class BuildInfo:
             return duration
 
         return self._duration
+
+    @duration.setter
+    def duration(self, value):
+        self.duration = value
 
     @property
     def parameters(self):
@@ -443,12 +478,20 @@ class BuildInfo:
 
         return self._result
 
+    @result.setter
+    def result(self, value):
+        self._result = value
+
     @property
     def description(self):
         if self._description is None:
             self._fetch_info()
 
         return self._description
+
+    @description.setter
+    def description(self, value):
+        self._description = value
 
     @property
     def failure_causes(self):
@@ -495,6 +538,12 @@ class BuildInfo:
             sub_build.fetch()
         except BuildNotFoundException as ex:
             logger.warning(ex)
+
+        # Append
+        if not self._sub_builds:
+            self._sub_builds = []
+        self._sub_builds.append(sub_build)
+
         return sub_build
 
     def __parse_pipeline_log(self):
@@ -576,10 +625,7 @@ class BuildInfo:
                         )
 
                         try:
-                            sub_build = self.create_sub_build(
-                                job_name, build_number, branch
-                            )
-                            self._sub_builds.append(sub_build)
+                            self.create_sub_build(job_name, build_number, branch)
 
                         except BuildNotFoundException as ex:
                             logger.error(ex)
@@ -594,6 +640,9 @@ class BuildInfo:
     # Retrieve the 'sub-builds', which are launched from this job.
     def _fetch_sub_builds(self):
         self._sub_builds = []
+
+        if self.virtual:
+            return
 
         if self.job_type not in ["pipeline"]:
             return
