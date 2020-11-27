@@ -1,6 +1,5 @@
 import svgwrite
 import logging
-import math
 import tempfile
 import cairosvg
 import base64
@@ -136,6 +135,10 @@ $(function() {
         }
         $(tooltip).css('top', top);
         $(tooltip).css('left', left);
+        if($(tooltip).width() < 300)
+        {
+            $(tooltip).css('width', 300);
+        }
         $(tooltip).fadeIn();
     });
     $('area').mouseout(function(e) {
@@ -146,6 +149,49 @@ $(function() {
     });
 });
 </script>"""
+
+
+class BoundaryBox:
+    def __init__(self, obj, x=None, y=None, max_x=None, max_y=None):
+        self.obj = obj
+        self.x = x
+        self.y = y
+        self.max_x = max_x
+        self.max_y = max_y
+
+    def __str__(self):
+        return "Box %s: (x=%s, y=%s) -> (x=%s, y=%s)" % (
+            self.obj,
+            self.x,
+            self.y,
+            self.max_x,
+            self.max_y,
+        )
+
+    def add_rect(self, insert, size):
+        max_x = insert[0] + size[0]
+        max_y = insert[1] + size[1]
+        # logger.debug("Add rect x1%s width%s -> x2%s", insert, size, (max_x, max_y))
+        if self.x is None or insert[0] < self.x:
+            self.x = insert[0]
+        if self.y is None or insert[1] < self.y:
+            self.y = insert[1]
+        if self.max_x is None or self.max_x < max_x:
+            self.max_x = max_x
+        if self.max_y is None or self.max_y < max_y:
+            self.max_y = max_y
+
+    def add_text(self, text, insert, class_):
+        font_size = 14
+        if class_ == "min":
+            font_size = 10
+        if class_ == "time":
+            font_size = 5
+        width = len(text) * (font_size * 0.65)
+        height = font_size
+        size = (width, height)
+        self.add_rect(insert, size)
+        return size
 
 
 class SvgPrinter:
@@ -171,6 +217,7 @@ class SvgPrinter:
         self.box_width = None
         self.total_height = None
         self.total_width = None
+        self.index_mode = "stairs"
 
         self.__dwg = None
         self.current_pos = None
@@ -180,33 +227,29 @@ class SvgPrinter:
         self.duration = self.job_info.duration
         self.max_duration = 0
 
-    def determine_max_duration(self):
-        self.max_duration = self.duration
-        if self.build_result == "IN_PROGRESS":
-            for build in self.all_builds:
-                self.max_duration = max(
-                    self.max_duration,
-                    build.start + build.duration - self.base_timestamp,
-                )
-
-        self.max_duration = (
-            math.ceil(self.max_duration / 1000 / 60 / 5) * 5
-        )  # in minutes, rounded up
+        self.boundary_boxes = {}
+        self.lanes = {}
 
     def __determine_sizes(self):
 
         self.base_timestamp = self.job_info.start
 
-        # Height based on number of builds to show
+        # First render pass to determine the sizes
+        self.__render_builds(render=False)
 
-        self.box_height = self.build_height * len(self.all_builds)
+        # Height based on number of lanes
+        self.box_height = self.build_height * len(self.lanes)
         self.total_height = 2 * self.margin + self.box_height
 
-        # Width based on duration
-        self.determine_max_duration()
+        # Width based on largest lane
+        max_x = 0
+        for lane in self.lanes:
+            if self.lanes[lane][-1].max_x > max_x:
+                max_x = self.lanes[lane][-1].max_x
+        self.max_duration = int(max_x / self.minute_width)
 
-        self.box_width = self.minute_width * self.max_duration
-        if self.max_duration == 0:
+        self.box_width = max_x
+        if self.box_width < self.min_width:
             self.box_width = self.min_width
         self.total_width = 2 * self.margin + self.box_width + self.extra_width
 
@@ -251,7 +294,7 @@ class SvgPrinter:
 
             self.current_pos += self.minute_width
 
-    def __render_section(self, build, section, build_index):
+    def __render_section(self, build, section, build_index, boundary_box, render):
         dwg = self.__dwg
 
         offset = (section.start - self.base_timestamp) / 1000 / 60
@@ -284,19 +327,29 @@ class SvgPrinter:
         x = self.margin + offset_px
         y = self.margin + build_index * self.build_height
 
-        dwg.add(
-            dwg.rect(
-                insert=(x, y + self.build_height - self.build_padding),
-                size=(duration_px, (1 + section_index) * self.section_height),
-                class_=class_name,
+        if render:
+            dwg.add(
+                dwg.rect(
+                    insert=(x, y + self.build_height - self.build_padding),
+                    size=(duration_px, (1 + section_index) * self.section_height),
+                    class_=class_name,
+                )
             )
-        )
 
-    def __render_queue(self, build, build_index):
+    def __determine_index(self, index, boundary_box, x):
+
+        index = self.__determine_next_lane(index, x)
+        if index not in self.lanes:
+            self.lanes[index] = []
+        self.lanes[index].append(boundary_box)
+
+        return index
+
+    def __render_queue(self, build, build_index, boundary_box, render):
         dwg = self.__dwg
 
         if build.queueing_duration is None:
-            return
+            return None
 
         offset = (
             (build.start - build.queueing_duration - self.base_timestamp) / 1000 / 60
@@ -309,25 +362,43 @@ class SvgPrinter:
         class_name = "queue"
 
         x = self.margin + offset_px
+
+        build_index = self.__determine_index(build_index, boundary_box, x)
+
         y = self.margin + build_index * self.build_height
 
-        dwg.add(
-            dwg.rect(
-                insert=(x, y + self.build_padding),
-                size=(duration_px, self.build_height - 2 * self.build_padding),
-                class_=class_name,
+        insert = (x, y + self.build_padding)
+        size = (duration_px, self.build_height - 2 * self.build_padding)
+
+        boundary_box.add_rect(insert=insert, size=size)
+        if render:
+            dwg.add(
+                dwg.rect(
+                    insert=insert,
+                    size=size,
+                    class_=class_name,
+                )
             )
-        )
 
-    def __render_build(self, build, index):
+        return build_index
+
+    def __render_build(self, build, index, boundary_box=None, render=True):
         dwg = self.__dwg
-
-        self.__render_queue(build, index)
 
         offset = 0
         if build.start:
             offset = (build.start - self.base_timestamp) / 1000 / 60
         offset_px = offset * self.minute_width
+
+        x = self.margin + offset_px
+
+        logger.debug("Rendering build %s in lane %d (x=%s)", build, index, x)
+
+        queue_index = self.__render_queue(build, index, boundary_box, render)
+        if queue_index is None:
+            index = self.__determine_index(index, boundary_box, x)
+        else:
+            index = queue_index
 
         duration = build.duration / 1000 / 60
         if build.result == "IN_PROGRESS":
@@ -353,7 +424,6 @@ class SvgPrinter:
         if build.job_type in ["pipeline", "buildFlow", "matrixBuild", "matrixRun"]:
             class_name = "pipe_%s" % class_name
 
-        x = self.margin + offset_px
         y = self.margin + index * self.build_height
 
         build_id = "%s#%s" % (build.job_name, build.build_number)
@@ -364,44 +434,104 @@ class SvgPrinter:
             "size": (duration_px, self.build_height - 2 * self.build_padding),
         }
         self.rect_builds[build_id] = build_r
-        dwg.add(
-            dwg.rect(insert=build_r["insert"], size=build_r["size"], class_=class_name)
-        )
+        boundary_box.add_rect(insert=build_r["insert"], size=build_r["size"])
+        if render:
+            dwg.add(
+                dwg.rect(
+                    insert=build_r["insert"], size=build_r["size"], class_=class_name
+                )
+            )
 
         if build.sections:
             for section in build.sections:
-                self.__render_section(build, section, index)
+                self.__render_section(build, section, index, boundary_box, render)
 
         build_info = ""
         if build.stage:
             build_info = "[%s] " % build.stage
         build_info += build_id
-        dwg.add(
-            dwg.text(
-                build_info,
-                insert=(x + 5, y + self.build_height - self.build_padding - 8),
-                class_="min",
+
+        text_pos = (x + 5, y + self.build_height - self.build_padding - 8)
+        boundary_box.add_text(build_info, insert=text_pos, class_="min")
+        if render:
+            dwg.add(
+                dwg.text(
+                    build_info,
+                    insert=text_pos,
+                    class_="min",
+                )
             )
-        )
 
         if self.show_time:
             queue_time = get_human_time(build.queueing_duration)
             exec_time = get_human_time(build.duration)
             build_time = "[queue: %s; build: %s]" % (queue_time, exec_time)
 
-            dwg.add(
-                dwg.text(
-                    build_time,
-                    insert=(x + 5, y + self.build_height - self.build_padding - 1),
-                    class_="time",
+            text_pos = (x + 5, y + self.build_height - self.build_padding - 1)
+            boundary_box.add_text(build_time, insert=text_pos, class_="time")
+            if render:
+                dwg.add(
+                    dwg.text(
+                        build_time,
+                        insert=text_pos,
+                        class_="time",
+                    )
                 )
-            )
 
-    def __render_builds(self):
-        current_idx = 0
-        for build in self.all_builds:
-            self.__render_build(build, current_idx)
-            current_idx += 1
+        return index
+
+    def __determine_next_lane(self, index, x):
+        next_index = None
+
+        if self.index_mode == "stairs":
+            if index is None:
+                next_index = 0
+            else:
+                next_index = index + 1
+
+        if self.index_mode == "compact":
+            max_lane = None
+
+            for lane in self.lanes:
+                boundary_box = None
+                if len(self.lanes[lane]) != 0:
+                    boundary_box = self.lanes[lane][-1]
+                if boundary_box is None:
+                    # Lane is empty, select it
+                    max_lane = lane
+                    break
+                if x > boundary_box.max_x:
+                    # The start of our position is above the max of the last box on that lane, select it
+                    max_lane = lane
+                    break
+            else:
+                # If there is no space in the existing lanes, add a new one
+                max_lane = len(self.lanes)
+
+            next_index = max_lane
+
+        if next_index is None:
+            raise Exception("Unknown index mode %s" % self.index_mode)
+
+        logger.debug("Next index: Index %s w/ x=%s => Next %s", index, x, next_index)
+        return next_index
+
+    def __render_builds(self, render=True):
+        index = None
+        self.lanes = {}
+        self.boundary_boxes = {}
+
+        def sort_build(build):
+            return build.start
+
+        all_builds = self.all_builds
+        if self.index_mode != "stairs":
+            all_builds = sorted(self.all_builds, key=sort_build)
+
+        for build in all_builds:
+            boundary_box = BoundaryBox(build)
+            self.boundary_boxes[build] = boundary_box
+            index = self.__render_build(build, index, boundary_box, render)
 
     def print_svg(self, output):
         self.__determine_sizes()
