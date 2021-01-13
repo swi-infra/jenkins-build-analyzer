@@ -399,7 +399,7 @@ class SvgPrinter:
 
         x = self.margin + offset_px
 
-        logger.debug("Rendering build %s in lane %d (x=%s)", build, index, x)
+        logger.debug("Rendering build %s in lane %s (x=%s)", build, index, x)
 
         queue_index = self.__render_queue(build, index, boundary_box, render)
         if queue_index is None:
@@ -409,7 +409,9 @@ class SvgPrinter:
 
         duration = build.duration / 1000 / 60
         if build.result == "IN_PROGRESS":
-            duration = self.max_duration - offset
+            max_duration = self.max_duration - offset
+            if max_duration < duration:
+                duration = max_duration
         duration_px = duration * self.minute_width
         if duration_px < self.min_width:
             duration_px = self.min_width
