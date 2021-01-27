@@ -451,6 +451,12 @@ class BuildInfo:
     def is_done(self):
         return (self.result != "IN_PROGRESS") and (self.result != "UNKNOWN")
 
+    def __check_infra_failure(self):
+        for cause in self.failure_causes:
+            if "retrigger" in cause["categories"]:
+                return "INFRA_FAILURE"
+        return "FAILURE"
+
     @property
     def result(self):
         if self._result:
@@ -471,10 +477,7 @@ class BuildInfo:
             result = "UNKNOWN"
 
         if result == "FAILURE":
-            for cause in self.failure_causes:
-                if "retrigger" in cause["categories"]:
-                    result = "INFRA_FAILURE"
-                    break
+            result = self.__check_infra_failure()
 
         self._result = result
 
@@ -482,6 +485,8 @@ class BuildInfo:
 
     @result.setter
     def result(self, value):
+        if value == "FAILURE":
+            value = self.__check_infra_failure()
         self._result = value
 
     @property

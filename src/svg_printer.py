@@ -102,6 +102,9 @@ HTML_TMPL = """<!DOCTYPE html>
             color: #ffbfbf;
             font-weight: 700;
         }
+        .sections .short {
+            opacity: 0.5;
+        }
     </style>
     %s
 </head>
@@ -655,6 +658,8 @@ class SvgPrinter:
                     txt = section
                     if section.end is None:
                         txt = '<span class="error">%s</span>' % section
+                    elif section.duration < 60 * 1000:
+                        txt = '<span class="short">%s</span>' % section
                     tooltip_lines.append("%s⊩ %s<br/>" % (padding, txt))
                 tooltip_lines.append("</div>")
 
