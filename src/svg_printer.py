@@ -4,6 +4,7 @@ import tempfile
 import cairosvg
 import base64
 import html
+import re
 
 from .job_info import get_human_time
 
@@ -633,9 +634,11 @@ class SvgPrinter:
             tooltip_lines.append("<b>Exec Time:</b> %s<br/>" % exec_time)
             tooltip_lines.append("<b>Result:</b> %s<br/>" % build.result)
             if build.description:
+                desc = build.description
+                desc = re.sub(r"<iframe.*<\/iframe>", "", desc)
+                desc = re.sub(r"<script.*<\/script>", "", desc)
                 tooltip_lines.append(
-                    '<b>Description:</b><br/><div class="description">%s</div>'
-                    % (build.description)
+                    '<b>Description:</b><br/><div class="description">%s</div>' % (desc)
                 )
 
             if len(build.failure_causes) != 0:
