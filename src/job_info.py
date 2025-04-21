@@ -6,6 +6,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
+import base64
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +194,8 @@ class BuildInfo:
     def __fetch_build_data(self, extra="", encoding="ISO-8859-1"):
         raw_data = None
         cache_key = None
+        LDAP_USERNAME = os.environ.get("LDAP_USERNAME")
+        LDAP_PASSWORD = os.environ.get("LDAP_PASSWORD")
         api_url = self.build_url(extra)
         if self.cache and self._build_number:
             cache_key = "jenkins-build-analyzer-%s" % api_url
@@ -203,7 +207,13 @@ class BuildInfo:
 
         logger.info("Fetching info from '%s'", api_url)
 
-        content = pool_manager.urlopen("GET", api_url)
+        LDAP_CREDENTIALS = f"{LDAP_USERNAME}:{LDAP_PASSWORD}"
+        encoded_credentials = base64.b64encode(LDAP_CREDENTIALS.encode("utf-8")).decode("utf-8")
+        headers = {
+            "Authorization": f"Basic {encoded_credentials}"
+        }
+        content = pool_manager.urlopen("GET", api_url,headers=headers)
+
         if content.status != 200:
             raise BuildNotFoundException(self)
 
